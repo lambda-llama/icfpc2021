@@ -6,17 +6,21 @@ use raylib::prelude::*;
 use crate::problem::{Figure, Point, Pose, Problem};
 
 struct Translator {
+    x_offset: f32,
+    y_offset: f32,
     zero: Point,
     x_step: f32,
     y_step: f32,
 }
 
 impl Translator {
-    fn new(rh: &RaylibHandle, p: &Problem) -> Translator {
+    fn new(x_offset: f32, y_offset: f32, width: f32, height: f32, p: &Problem) -> Translator {
         let (min_p, max_p) = bounding_box(p);
-        let x_step = (rh.get_screen_width() as f32) / ((max_p.x() - min_p.x()) as f32);
-        let y_step = (rh.get_screen_height() as f32) / ((max_p.y() - min_p.y()) as f32);
+        let x_step = width / ((max_p.x() - min_p.x()) as f32);
+        let y_step = height / ((max_p.y() - min_p.y()) as f32);
         return Translator {
+            x_offset,
+            y_offset,
             zero: min_p,
             x_step,
             y_step,
@@ -25,15 +29,15 @@ impl Translator {
 
     fn translate(&self, p: &Point) -> Vector2 {
         return Vector2::new(
-            ((p.x() - self.zero.x()) as f32) * self.x_step,
-            ((p.y() - self.zero.y()) as f32) * self.y_step,
+            ((p.x() - self.zero.x()) as f32) * self.x_step + self.x_offset,
+            ((p.y() - self.zero.y()) as f32) * self.y_step + self.y_offset,
         );
     }
 
     fn untranslate(&self, v: &Vector2) -> Point {
         return Point::new(
-            (v.x / self.x_step + (self.zero.x() as f32)).round() as i64,
-            (v.y / self.y_step + (self.zero.y() as f32)).round() as i64,
+            ((v.x - self.x_offset) / self.x_step + (self.zero.x() as f32)).round() as i64,
+            ((v.y - self.y_offset) / self.y_step + (self.zero.y() as f32)).round() as i64,
         );
     }
 }
@@ -123,13 +127,25 @@ fn hit_test(pose: &Pose, mouse_pos: Point, dist: i64) -> Option<usize> {
 pub fn interact(problem: Problem, mut pose: Pose) {
     use raylib::consts::*;
 
-    const WINDOW_WIDTH: i32 = 640;
-    const WINDOW_HEIGHT: i32 = 480;
-    let (mut rh, thread) = raylib::init().size(WINDOW_HEIGHT, WINDOW_WIDTH).build();
+    const WINDOW_WIDTH: i32 = 1024;
+    const WINDOW_HEIGHT: i32 = 768;
+
+    const VIEWPORT_OFFSET_X: f32 = 20.0;
+    const VIEWPORT_OFFSET_Y: f32 = 20.0;
+    const VIEWPORT_WIDTH: f32 = 600.0;
+    const VIEWPORT_HEIGHT: f32 = 600.0;
+
+    let (mut rh, thread) = raylib::init().size(WINDOW_WIDTH, WINDOW_HEIGHT).build();
 
     let mut dragged_point = None;
+    let t = Translator::new(
+        VIEWPORT_OFFSET_X,
+        VIEWPORT_OFFSET_Y,
+        VIEWPORT_WIDTH,
+        VIEWPORT_HEIGHT,
+        &problem,
+    );
     while !rh.window_should_close() {
-        let t = Translator::new(&rh, &problem);
         {
             let mut d = rh.begin_drawing(&thread);
             d.clear_background(Color::WHITE);
