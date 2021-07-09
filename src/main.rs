@@ -1,5 +1,10 @@
+use problem::Problem;
 use raylib::prelude::*;
 use std::{thread, time};
+
+mod problem;
+
+type Result<T> = std::result::Result<T, anyhow::Error>;
 
 // Graphics related settings.
 const WINDOW_WIDTH: i32 = 640;
@@ -92,14 +97,24 @@ impl Solver {
     }
 }
 
-fn main() {
-    let mut solver = Solver::new(true);
-    loop {
-        solver.run_solve_step();
-        solver.draw();
-        if solver.process_events() {
-            return;
+fn main() -> Result<()> {
+    // TODO: viz vs non-viz switch
+    if true {
+        let problem = std::env::args().nth(1).expect("Usage: APP <problem>");
+        let data = std::fs::read(&problem)?;
+        let problem: Problem = serde_json::from_slice(&data)?;
+        println!("{:?}", problem);
+        // TODO
+    } else {
+        let mut solver = Solver::new(true);
+        loop {
+            solver.run_solve_step();
+            solver.draw();
+            if solver.process_events() {
+                return Ok(());
+            }
+            thread::sleep(time::Duration::from_millis(50));
         }
-        thread::sleep(time::Duration::from_millis(50));
     }
+    Ok(())
 }
