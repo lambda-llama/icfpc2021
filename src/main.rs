@@ -77,6 +77,19 @@ impl Solver {
             }
         }
     }
+
+    fn process_events(&mut self) -> bool {
+        if let Some(g) = self.graphics.as_mut() {
+            if let Some(key) = g.rh.get_key_pressed() {
+                match key {
+                    _ => (),
+                }
+            }
+            g.rh.window_should_close()
+        } else {
+            false
+        }
+    }
 }
 
 fn main() {
@@ -84,6 +97,9 @@ fn main() {
     loop {
         solver.run_solve_step();
         solver.draw();
-        thread::sleep(time::Duration::from_millis(500));
+        if solver.process_events() {
+            return;
+        }
+        thread::sleep(time::Duration::from_millis(50));
     }
 }
