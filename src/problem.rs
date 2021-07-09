@@ -9,10 +9,22 @@ pub type Point = geo::Point<i64>;
 pub struct Figure {
     pub vertices: Vec<Point>,
     pub edges: Vec<(usize, usize)>,
+    pub vertex_edges: Vec<Vec<(usize, usize)>>,
     pub epsilon: f64,
 }
 
 impl Figure {
+    pub fn new(vertices: Vec<Point>, edges: Vec<(usize, usize)>, epsilon: f64) -> Self {
+        let mut vertex_edges = vec![Vec::new(); vertices.len()];
+        for (i, e) in edges.iter().enumerate() {
+            vertex_edges[e.0].push((i, e.1));
+            vertex_edges[e.1].push((i, e.0));
+        }
+
+        let figure = Self { vertices, edges, vertex_edges, epsilon };
+        return figure;
+    }
+
     pub fn distance(p: Point, q: Point) -> f64 {
         ((p.x() - q.x()) as f64).powi(2) + ((p.y() - q.y()) as f64).powi(2)
     }
@@ -55,17 +67,14 @@ impl Problem {
         } = serde_json::from_slice(data)?;
         Ok(Problem {
             hole: hole.into_iter().map(|p| Point::new(p[0], p[1])).collect(),
-            figure: Figure {
-                vertices: vertices
+            figure: Figure::new(
+                vertices
                     .into_iter()
                     .map(|p| Point::new(p[0], p[1]))
                     .collect(),
-                edges: edges
-                    .into_iter()
-                    .map(|e| (e[0] as usize, e[1] as usize))
-                    .collect(),
-                epsilon: epsilon as f64 / 1_000_000.0f64,
-            },
+                edges.into_iter().map(|e| (e[0] as usize, e[1] as usize)).collect(),
+                epsilon as f64 / 1_000_000.0f64,
+            ),
         })
     }
 
