@@ -1,5 +1,6 @@
 use clap::App;
 use problem::Problem;
+use problem::Pose;
 use raylib::prelude::*;
 use render::{render_problem, Translator};
 use std::{thread, time};
@@ -106,9 +107,19 @@ fn main() -> Result<()> {
             )?;
         }
         Some(("upload", matches)) => {
+            let solution = matches.value_of("PATH").unwrap();
+            let solution_data = std::fs::read(&solution)?;
+            let pose = Pose::from_json(&solution_data)?;
+
+            let id = matches.value_of("ID").unwrap();
+            let problem = format!("problems/{}.problem", matches.value_of("ID").unwrap());
+            let problem_data = std::fs::read(&problem)?;
+            let problem = Problem::from_json(&problem_data)?;
+            assert!(problem.validate(&pose), "Pose should fit into the hole");
+
             portal::SESSION.upload_solution(
-                matches.value_of("ID").unwrap().parse()?,
-                matches.value_of("PATH").unwrap(),
+                id.parse()?,
+                solution,
             )?;
         }
         _ => (),

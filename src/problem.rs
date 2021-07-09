@@ -88,6 +88,10 @@ impl Problem {
         ).sum();
         sum.trunc() as u64
     }
+
+    pub fn validate(&self, pose: &Pose) -> bool {
+        true
+    }
 }
 
 #[derive(Debug)]
@@ -102,6 +106,18 @@ impl Pose {
         };
         Ok(serde_json::to_string(&pose)?)
     }
+
+    pub fn from_json(data: &[u8]) -> Result<Self> {
+        let RawPose {
+            vertices,
+        } = serde_json::from_slice(&data)?;
+        Ok(Pose {
+            vertices: vertices
+                .into_iter()
+                .map(|p| Point { x: p[0], y: p[1] })
+                .collect(),
+        })
+    }
 }
 
 // Serialization helper types below
@@ -112,6 +128,7 @@ struct RawFigure {
     pub edges: Vec<Vec<u64>>,
 }
 
+
 #[derive(Deserialize)]
 struct RawProblem {
     pub hole: Vec<Vec<i64>>,
@@ -120,6 +137,7 @@ struct RawProblem {
 }
 
 #[derive(Serialize)]
+#[derive(Deserialize)]
 struct RawPose {
     pub vertices: Vec<Vec<i64>>,
 }
