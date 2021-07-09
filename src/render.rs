@@ -186,7 +186,9 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
         if let Some(key) = rh.get_key_pressed() {
             match key {
                 KeyboardKey::KEY_S => {
-                    std::fs::write("./current.solution", pose.borrow().to_json()?)?;
+                    const PATH: &'static str = "./current.solution";
+                    std::fs::write(PATH, pose.borrow().to_json()?)?;
+                    println!("Saved to {}", PATH);
                 }
                 KeyboardKey::KEY_D => {
                     if gen.resume().is_some() {
