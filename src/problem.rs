@@ -6,7 +6,7 @@ use geo::algorithm::contains::Contains;
 
 use crate::common::*;
 
-pub type Point = geo::Point<i64>;
+pub type Point = geo::Coordinate<i64>;
 
 #[derive(Debug)]
 pub struct Figure {
@@ -33,7 +33,7 @@ impl Figure {
     }
 
     pub fn distance(p: Point, q: Point) -> f64 {
-        ((p.x() - q.x()) as f64).powi(2) + ((p.y() - q.y()) as f64).powi(2)
+        ((p.x - q.x) as f64).powi(2) + ((p.y - q.y) as f64).powi(2)
     }
 
     pub fn edge_len(&self, idx: usize, pose: &Pose) -> f64 {
@@ -68,10 +68,13 @@ pub struct Problem {
 
 impl Problem {
     pub fn new(hole: Vec<Point>, figure: Figure) -> Self {
-        let mut border: Vec<geo::Point<f64>> = hole
+        let mut border: Vec<geo::Coordinate<f64>> = hole
             .clone()
             .into_iter()
-            .map(|p| geo::Point::new(p.x() as f64, p.y() as f64))
+            .map(|p| geo::Coordinate {
+                x: p.x as f64,
+                y: p.y as f64,
+            })
             .collect();
         border.push(border[0]);
 
@@ -89,11 +92,13 @@ impl Problem {
             epsilon,
         } = serde_json::from_slice(data)?;
         Ok(Problem::new(
-            hole.into_iter().map(|p| Point::new(p[0], p[1])).collect(),
+            hole.into_iter()
+                .map(|p| Point { x: p[0], y: p[1] })
+                .collect(),
             Figure::new(
                 vertices
                     .into_iter()
-                    .map(|p| Point::new(p[0], p[1]))
+                    .map(|p| Point { x: p[0], y: p[1] })
                     .collect(),
                 edges
                     .into_iter()
@@ -122,7 +127,7 @@ impl Problem {
 
     pub fn validate(&self, pose: &Pose) -> bool {
         for p in &pose.vertices {
-            let fp = geo::Point::new(p.x() as f64, p.y() as f64);
+            let fp = geo::Point::new(p.x as f64, p.y as f64);
             let relation = self.poly.relate(&fp);
             if !(relation.is_within() || relation.is_intersects()) {
                 return false;
@@ -133,7 +138,7 @@ impl Problem {
     }
 
     pub fn min_distance_to(&self, point: Point) -> f64 {
-        let p = geo::Point::new(point.x() as f64, point.y() as f64);
+        let p = geo::Point::new(point.x as f64, point.y as f64);
         if self.poly.contains(&p) {
             return 0.0;
         }
@@ -152,14 +157,14 @@ impl Pose {
         Ok(Pose {
             vertices: vertices
                 .into_iter()
-                .map(|p| Point::new(p[0], p[1]))
+                .map(|p| Point{x: p[0], y: p[1]})
                 .collect(),
         })
     }
 
     pub fn to_json(&self) -> Result<String> {
         let pose = RawPose {
-            vertices: self.vertices.iter().map(|p| vec![p.x(), p.y()]).collect(),
+            vertices: self.vertices.iter().map(|p| vec![p.x, p.y]).collect(),
         };
         Ok(serde_json::to_string(&pose)?)
     }

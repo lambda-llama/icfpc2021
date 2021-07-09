@@ -20,8 +20,8 @@ struct Translator {
 impl Translator {
     fn new(x_offset: f32, y_offset: f32, width: f32, height: f32, p: &Problem) -> Translator {
         let (min_p, max_p) = bounding_box(p);
-        let x_step = width / ((max_p.x() - min_p.x()) as f32);
-        let y_step = height / ((max_p.y() - min_p.y()) as f32);
+        let x_step = width / ((max_p.x - min_p.x) as f32);
+        let y_step = height / ((max_p.y - min_p.y) as f32);
         return Translator {
             x_offset,
             y_offset,
@@ -33,28 +33,28 @@ impl Translator {
 
     fn translate(&self, p: &Point) -> Vector2 {
         return Vector2::new(
-            ((p.x() - self.zero.x()) as f32) * self.x_step + self.x_offset,
-            ((p.y() - self.zero.y()) as f32) * self.y_step + self.y_offset,
+            ((p.x - self.zero.x) as f32) * self.x_step + self.x_offset,
+            ((p.y - self.zero.y) as f32) * self.y_step + self.y_offset,
         );
     }
 
     fn untranslate(&self, v: &Vector2) -> Point {
-        return Point::new(
-            ((v.x - self.x_offset) / self.x_step + (self.zero.x() as f32)).round() as i64,
-            ((v.y - self.y_offset) / self.y_step + (self.zero.y() as f32)).round() as i64,
-        );
+        return Point{
+            x: ((v.x - self.x_offset) / self.x_step + (self.zero.x as f32)).round() as i64,
+            y: ((v.y - self.y_offset) / self.y_step + (self.zero.y as f32)).round() as i64,
+        };
     }
 }
 
 fn bounding_box(p: &Problem) -> (Point, Point) {
-    let mut min_p = Point::new(i64::MAX, i64::MAX);
-    let mut max_p = Point::new(0, 0);
+    let mut min_p = Point{x: i64::MAX, y: i64::MAX};
+    let mut max_p = Point{x: 0, y: 0};
     let it = p.hole.iter().chain(p.hole.iter());
     for p in it {
-        min_p.set_x(std::cmp::min(min_p.x(), p.x()));
-        max_p.set_x(std::cmp::max(max_p.x(), p.x()));
-        min_p.set_y(std::cmp::min(min_p.y(), p.y()));
-        max_p.set_y(std::cmp::max(max_p.y(), p.y()));
+        min_p.x = std::cmp::min(min_p.x, p.x);
+        max_p.x = std::cmp::max(max_p.x, p.x);
+        min_p.y = std::cmp::min(min_p.y, p.y);
+        max_p.y = std::cmp::max(max_p.y, p.y);
     }
     return (min_p, max_p);
 }

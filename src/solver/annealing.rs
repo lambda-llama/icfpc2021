@@ -48,10 +48,10 @@ impl Solver for AnnealingSolver {
                         rand::random::<usize>() % pose.borrow().vertices.len();
                     let direction: usize = rand::random::<usize>() % 4;
                     let prev_pos = pose.borrow().vertices[vertex_index];
-                    let new_pos = Point::new(
-                        prev_pos.x() + step_size * DX[direction],
-                        prev_pos.y() + step_size * DY[direction],
-                    );
+                    let new_pos = Point{
+                        x: prev_pos.x + step_size * DX[direction],
+                        y: prev_pos.y + step_size * DY[direction],
+                    };
                     // Compute score here.
                     let vertex_distance = problem.min_distance_to(new_pos);
                     let delta_distance = vertex_distance - vertex_distances[vertex_index];
