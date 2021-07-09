@@ -5,8 +5,10 @@ use rand::{thread_rng, Rng};
 
 use super::Solver;
 
-const OUTER_IT: usize = 10;
 const INNER_IT: usize = 100000;
+const START_T: f64 = 10.0;
+const END_T: f64 = 0.1;
+const T_DECAY: f64 = 0.97;
 // const MAX_STEP: i64 = 10;
 
 const DX: [i64; 4] = [0, 1, 0, -1];
@@ -22,6 +24,7 @@ impl Solver for AnnealingSolver {
     ) -> generator::LocalGenerator<'a, (), Rc<RefCell<Pose>>> {
         generator::Gn::new_scoped_local(move |mut s| {
             s.yield_(pose.clone());
+            let mut best_pose = pose.clone();
             let mut total_vertex_distance = 0.0;
             let mut best_dislikes = problem.dislikes(&pose.borrow());
             let mut cur_dislikes = problem.dislikes(&pose.borrow());
@@ -40,18 +43,16 @@ impl Solver for AnnealingSolver {
                 + 100.0 * total_vertex_violation;
             let mut min_energy: f64 = cur_energy;
 
-            for outer_it in 0..OUTER_IT {
-                // let step: i64 = (MAX_STEP
-                //     * ((OUTER_IT - outer_it) as f64 / OUTER_IT as f64))
-                //     .ceil() as i64;
-                let step_size = (OUTER_IT - outer_it) as i64;
+            let mut temperature = START_T;
+            while temperature > END_T {
+                let step_size = 1;
                 for inner_it in 0..INNER_IT {
                     // let vertex_index: usize =
                     //     rand::random::<usize>() % pose.borrow().vertices.len();
                     let vertex_index: usize = inner_it % pose.borrow().vertices.len();
                     let direction: usize = rand::random::<usize>() % 4;
                     let prev_pos = pose.borrow().vertices[vertex_index];
-                    let new_pos = Point{
+                    let new_pos = Point {
                         x: prev_pos.x + step_size * DX[direction],
                         y: prev_pos.y + step_size * DY[direction],
                     };
@@ -65,17 +66,18 @@ impl Solver for AnnealingSolver {
                         new_vertex_edge_violation - vertex_edge_violation[vertex_index];
 
                     pose.borrow_mut().vertices[vertex_index] = new_pos;
-                    s.yield_(pose.clone());
                     let dislikes = problem.dislikes(&pose.borrow());
                     let energy = dislikes as f64
                         + 100.0 * (total_vertex_distance + delta_distance)
                         + 100.0 * (total_vertex_violation + 2.0 * delta_violation);
-                    if accept_energy(cur_energy, energy, 0.1 * outer_it as f64) {
+                    if accept_energy(cur_energy, energy, temperature) {
                         // Move if works.
                         // Compare it with best score.
                         if energy < min_energy {
                             min_energy = energy;
                             best_dislikes = dislikes;
+                            best_pose = pose.clone();
+                            s.yield_(pose.clone());
                             println!("Found better pose: {}", energy);
                         }
                         vertex_distances[vertex_index] = vertex_distance;
@@ -86,14 +88,15 @@ impl Solver for AnnealingSolver {
                         cur_energy = energy;
                     } else {
                         pose.borrow_mut().vertices[vertex_index] = prev_pos;
-                        s.yield_(pose.clone());
                     }
                 }
                 println!(
-                "step_size: {}, edge_violation: {}, energy: {}, total_vertex_distance: {}, dislikes: {}, min_energy: {}, best_dislikes: {}",
-                step_size, total_vertex_violation, cur_energy, total_vertex_distance, cur_dislikes, min_energy, best_dislikes
-            );
+                    "temperature: {}, edge_violation: {}, energy: {}, total_vertex_distance: {}, dislikes: {}, min_energy: {}, best_dislikes: {}",
+                    temperature, total_vertex_violation, cur_energy, total_vertex_distance, cur_dislikes, min_energy, best_dislikes
+                );
+                temperature *= T_DECAY;
             }
+            s.yield_(best_pose.clone());
             done!()
         })
     }
