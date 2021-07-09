@@ -1,3 +1,4 @@
+use ordered_float::NotNan;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::common::*;
@@ -16,7 +17,7 @@ pub struct Figure {
 }
 
 impl Figure {
-    fn distance(p: Point, q: Point) -> f64 {
+    pub fn distance(p: Point, q: Point) -> f64 {
         ((p.x - q.x) as f64).powi(2) + ((p.y - q.y) as f64).powi(2)
     }
 
@@ -36,7 +37,10 @@ impl Figure {
 
     pub fn edge_len_bounds(&self, idx: usize) -> (f64, f64) {
         let len_default = self.edge_len_default(idx);
-        ((1.0f64 - self.epsilon) * len_default, (1.0f64 + self.epsilon) * len_default)
+        (
+            (1.0f64 - self.epsilon) * len_default,
+            (1.0f64 + self.epsilon) * len_default,
+        )
     }
 }
 
@@ -63,10 +67,26 @@ impl Problem {
                     .into_iter()
                     .map(|p| Point { x: p[0], y: p[1] })
                     .collect(),
-                edges: edges.into_iter().map(|e| (e[0] as usize, e[1] as usize)).collect(),
+                edges: edges
+                    .into_iter()
+                    .map(|e| (e[0] as usize, e[1] as usize))
+                    .collect(),
                 epsilon: epsilon as f64 / 1_000_000.0f64,
             },
         })
+    }
+
+    pub fn dislikes(&self, pose: &Pose) -> u64 {
+        let sum: f64 = self.hole.iter().map(|&v|
+            pose
+                .vertices
+                .iter()
+                .map(|&p| NotNan::new(Figure::distance(p, v)).unwrap())
+                .min()
+                .unwrap()
+                .into_inner()
+        ).sum();
+        sum.trunc() as u64
     }
 }
 
@@ -78,7 +98,7 @@ pub struct Pose {
 impl Pose {
     pub fn to_json(&self) -> Result<String> {
         let pose = RawPose {
-            vertices: self.vertices.iter().map(|p| vec![p.x, p.y]).collect()
+            vertices: self.vertices.iter().map(|p| vec![p.x, p.y]).collect(),
         };
         Ok(serde_json::to_string(&pose)?)
     }
