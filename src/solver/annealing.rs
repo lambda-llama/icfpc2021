@@ -6,7 +6,7 @@ use rand::Rng;
 
 use super::Solver;
 
-const INNER_IT: usize = 10000;
+const INNER_IT: usize = 100000;
 const START_T: f64 = 10.0;
 const END_T: f64 = 0.1;
 const T_DECAY: f64 = 0.97;
