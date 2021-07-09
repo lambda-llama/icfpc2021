@@ -51,7 +51,8 @@ fn main() -> Result<()> {
             App::new("upload")
                 .arg("<ID> problem N")
                 .arg("<PATH> path/to/N.solution"),
-        );
+        )
+        .subcommand(App::new("stats").arg("<INPUT> path/to/problems"));
 
     let matches = app.get_matches();
     match matches.subcommand() {
@@ -143,7 +144,7 @@ fn main() -> Result<()> {
                     vertices: problem.figure.vertices.clone(),
                 },
             };
-            interact(problem, pose);
+            interact(problem, pose)?;
         }
         Some(("download", matches)) => {
             portal::SESSION.download_problem(
@@ -163,6 +164,24 @@ fn main() -> Result<()> {
             assert!(problem.validate(&pose), "Pose should fit into the hole");
 
             portal::SESSION.upload_solution(id.parse()?, solution)?;
+        }
+        Some(("stats", matches)) => {
+            let problems_path = std::path::Path::new(matches.value_of("INPUT").unwrap());
+            // NOTE: we're assuming the files are named N.problem as this allows to iterate them in order
+            let count = problems_path.read_dir()?.count();
+            for i in 1..=count {
+                let problem = Problem::from_json(&std::fs::read(
+                    problems_path.join(format!("{}.problem", i)),
+                )?)?;
+                println!("Problem {}: ", i);
+                println!("  Hole: {} vertices", problem.hole.len());
+                println!(
+                    "  Figure: {} vertices, {} edges, e={}",
+                    problem.figure.vertices.len(),
+                    problem.figure.edges.len(),
+                    problem.figure.epsilon
+                );
+            }
         }
         _ => (),
     }
