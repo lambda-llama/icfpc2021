@@ -1,6 +1,6 @@
 use clap::App;
-use problem::Problem;
 use problem::Pose;
+use problem::Problem;
 use raylib::prelude::*;
 use render::interact;
 use std::{thread, time};
@@ -151,10 +151,7 @@ fn main() -> Result<()> {
             let problem = Problem::from_json(&problem_data)?;
             assert!(problem.validate(&pose), "Pose should fit into the hole");
 
-            portal::SESSION.upload_solution(
-                id.parse()?,
-                solution,
-            )?;
+            portal::SESSION.upload_solution(id.parse()?, solution)?;
         }
         _ => (),
     }

@@ -129,7 +129,6 @@ struct RawFigure {
     pub edges: Vec<Vec<u64>>,
 }
 
-
 #[derive(Deserialize)]
 struct RawProblem {
     pub hole: Vec<Vec<i64>>,
