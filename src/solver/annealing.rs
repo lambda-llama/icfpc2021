@@ -1,8 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::problem::{Figure, Point, Pose, Problem};
-use rand::Rng;
 use rand::rngs::StdRng;
+use rand::Rng;
 
 use super::Solver;
 
@@ -117,8 +117,8 @@ fn edges_violation_after_move(
 ) -> f64 {
     let mut total_violation = 0.0;
     for (edge_index, dst) in &figure.vertex_edges[vertex_index] {
-        let new_distance = Figure::distance(new_position, pose.borrow().vertices[*dst]);
-        let bounds = figure.edge_len_bounds(*edge_index);
+        let new_distance = Figure::distance_squared(new_position, pose.borrow().vertices[*dst]);
+        let bounds = figure.edge_len2_bounds(*edge_index);
         if new_distance < bounds.0 {
             total_violation += bounds.0 - new_distance;
         } else if new_distance > bounds.1 {
@@ -135,8 +135,8 @@ fn edges_valid_after_move(
     figure: &Figure,
 ) -> bool {
     for (edge_index, dst) in &figure.vertex_edges[vertex_index] {
-        let new_distance = Figure::distance(new_position, pose.borrow().vertices[*dst]);
-        let bounds = figure.edge_len_bounds(*edge_index);
+        let new_distance = Figure::distance_squared(new_position, pose.borrow().vertices[*dst]);
+        let bounds = figure.edge_len2_bounds(*edge_index);
         if new_distance < bounds.0 || new_distance > bounds.1 {
             return false;
         }

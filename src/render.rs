@@ -48,17 +48,6 @@ impl Translator {
     }
 }
 
-// TODO: bool => enum (ok, close to bad, bad)
-fn test_edge_length(figure: &Figure, pose: &Pose, idx: usize) -> bool {
-    let (min, max) = figure.edge_len_bounds(idx);
-    let len = figure.edge_len(idx, pose);
-    if len < min || len > max {
-        false
-    } else {
-        true
-    }
-}
-
 fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, pose: &Pose) {
     const POINT_RADIUS: f32 = 5.0;
     const LINE_THICKNESS_HOLE: f32 = 4.0;
@@ -95,7 +84,7 @@ fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, p
             t.translate(&pose.vertices[*i as usize]),
             t.translate(&pose.vertices[*j as usize]),
             LINE_THICKNESS_EDGE,
-            match test_edge_length(&problem.figure, pose, idx) {
+            match problem.figure.test_edge_len2(idx, pose) {
                 true => COLOR_EDGE_OK,
                 false => COLOR_EDGE_BAD,
             },
@@ -112,7 +101,7 @@ fn hit_test(pose: &Pose, mouse_pos: Point, dist: i64) -> Option<usize> {
         .iter()
         .enumerate()
         .map(|(i, &p)| {
-            let dist = NotNan::new(Figure::distance(p, mouse_pos)).unwrap();
+            let dist = NotNan::new(Figure::distance_squared(p, mouse_pos).sqrt()).unwrap();
             (i, dist)
         })
         .collect::<Vec<_>>();

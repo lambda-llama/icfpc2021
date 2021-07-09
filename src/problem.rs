@@ -1,8 +1,8 @@
+use geo::algorithm::contains::Contains;
+use geo::algorithm::euclidean_distance::EuclideanDistance;
 use geo::relate::Relate;
 use ordered_float::NotNan;
 use serde_derive::{Deserialize, Serialize};
-use geo::algorithm::euclidean_distance::EuclideanDistance;
-use geo::algorithm::contains::Contains;
 
 use crate::common::*;
 
@@ -32,30 +32,41 @@ impl Figure {
         }
     }
 
-    pub fn distance(p: Point, q: Point) -> f64 {
+    pub fn distance_squared(p: Point, q: Point) -> f64 {
         ((p.x - q.x) as f64).powi(2) + ((p.y - q.y) as f64).powi(2)
     }
 
-    pub fn edge_len(&self, idx: usize, pose: &Pose) -> f64 {
+    pub fn edge_len2(&self, idx: usize, pose: &Pose) -> f64 {
         let e = self.edges[idx];
         let p = pose.vertices[e.0];
         let q = pose.vertices[e.1];
-        Self::distance(p, q)
+        Self::distance_squared(p, q)
     }
 
-    pub fn edge_len_default(&self, idx: usize) -> f64 {
+    pub fn edge_len2_default(&self, idx: usize) -> f64 {
         let e = self.edges[idx];
         let p = self.vertices[e.0];
         let q = self.vertices[e.1];
-        Self::distance(p, q)
+        Self::distance_squared(p, q)
     }
 
-    pub fn edge_len_bounds(&self, idx: usize) -> (f64, f64) {
-        let len_default = self.edge_len_default(idx);
+    pub fn edge_len2_bounds(&self, idx: usize) -> (f64, f64) {
+        let weight_default = self.edge_len2_default(idx);
         (
-            (1.0f64 - self.epsilon) * len_default,
-            (1.0f64 + self.epsilon) * len_default,
+            (1.0f64 - self.epsilon) * weight_default,
+            (1.0f64 + self.epsilon) * weight_default,
         )
+    }
+
+    // TODO: bool => enum (ok, close to bad, bad)
+    pub fn test_edge_len2(&self, idx: usize, pose: &Pose) -> bool {
+        let (min, max) = self.edge_len2_bounds(idx);
+        let len = self.edge_len2(idx, pose);
+        if len < min || len > max {
+            false
+        } else {
+            true
+        }
     }
 }
 
@@ -116,7 +127,7 @@ impl Problem {
             .map(|&v| {
                 pose.vertices
                     .iter()
-                    .map(|&p| NotNan::new(Figure::distance(p, v)).unwrap())
+                    .map(|&p| NotNan::new(Figure::distance_squared(p, v)).unwrap())
                     .min()
                     .unwrap()
                     .into_inner()
@@ -126,18 +137,26 @@ impl Problem {
     }
 
     pub fn validate(&self, pose: &Pose) -> bool {
-        let to_fp = |p: &&Point| geo::Point::new(p.x as f64, p.y as f64);
-        for p in &pose.vertices {
-            let relation = self.poly.relate(&to_fp(&p));
+        // 1 - vertices are inside
+        let to_fp = |p: Point| geo::Point::new(p.x as f64, p.y as f64);
+        for &p in &pose.vertices {
+            let relation = self.poly.relate(&to_fp(p));
             if !(relation.is_within() || relation.is_intersects()) {
                 return false;
             }
         }
-        for (u, v)in &self.figure.edges {
-            let s = geo::LineString::from(vec![to_fp(&&pose.vertices[*u]), to_fp(&&pose.vertices[*v])]);
+        // 2 - edges are inside
+        for (u, v) in &self.figure.edges {
+            let s = geo::LineString::from(vec![to_fp(pose.vertices[*u]), to_fp(pose.vertices[*v])]);
             let relation = self.poly.relate(&s);
             if !relation.is_contains() {
-                return false
+                return false;
+            }
+        }
+        // 3 - edges are of correct length
+        for idx in 0..self.figure.edges.len() {
+            if !self.figure.test_edge_len2(idx, pose) {
+                return false;
             }
         }
         true
@@ -179,7 +198,7 @@ impl Pose {
         Ok(Pose {
             vertices: vertices
                 .into_iter()
-                .map(|p| Point{x: p[0], y: p[1]})
+                .map(|p| Point { x: p[0], y: p[1] })
                 .collect(),
         })
     }

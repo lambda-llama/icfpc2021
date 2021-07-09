@@ -52,7 +52,10 @@ impl Solver for JammerSolver {
                         }
                         rel = problem.poly.relate(&p);
                     }
-                    let new_p = Point { x: p.x().trunc() as i64, y: p.y().trunc() as i64 };
+                    let new_p = Point {
+                        x: p.x().trunc() as i64,
+                        y: p.y().trunc() as i64,
+                    };
                     pose.borrow_mut().vertices[idx] = new_p;
                     s.yield_(pose.clone());
                 }
