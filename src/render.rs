@@ -2,7 +2,7 @@ use std::{thread, time};
 
 use raylib::prelude::*;
 
-use crate::problem::{Point, Problem};
+use crate::problem::{Point, Pose, Problem};
 
 struct Translator {
     zero: Point,
@@ -40,7 +40,7 @@ impl Translator {
 fn bounding_box(p: &Problem) -> (Point, Point) {
     let mut min_p = Point::new(i64::MAX, i64::MAX);
     let mut max_p = Point::new(0, 0);
-    let it = p.figure.vertices.iter().chain(p.hole.iter());
+    let it = p.hole.iter().chain(p.hole.iter());
     for p in it {
         min_p.set_x(std::cmp::min(min_p.x(), p.x()));
         max_p.set_x(std::cmp::max(max_p.x(), p.x()));
@@ -50,11 +50,11 @@ fn bounding_box(p: &Problem) -> (Point, Point) {
     return (min_p, max_p);
 }
 
-fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, p: &Problem) {
+fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, pose: &Pose) {
     const POINT_RADIUS: f32 = 5.0;
 
-    let mut last_p: Option<&Point> = p.hole.last();
-    for p in p.hole.iter() {
+    let mut last_p: Option<&Point> = problem.hole.last();
+    for p in problem.hole.iter() {
         d.draw_circle_v(t.translate(&p), POINT_RADIUS, Color::BLACK);
         match last_p {
             Some(pp) => d.draw_line_v(t.translate(&pp), t.translate(&p), Color::BLACK),
@@ -63,20 +63,19 @@ fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, p: &Problem) {
         last_p = Some(p);
     }
 
-    let fig = &p.figure;
-    for p in fig.vertices.iter() {
+    for p in pose.vertices.iter() {
         d.draw_circle_v(t.translate(p), POINT_RADIUS, Color::RED);
     }
-    for (i, j) in fig.edges.iter() {
+    for (i, j) in problem.figure.edges.iter() {
         d.draw_line_v(
-            t.translate(&fig.vertices[*i as usize]),
-            t.translate(&fig.vertices[*j as usize]),
+            t.translate(&pose.vertices[*i as usize]),
+            t.translate(&pose.vertices[*j as usize]),
             Color::RED,
         );
     }
 }
 
-pub fn interact(mut p: Problem) {
+pub fn interact(problem: Problem, mut pose: Pose) {
     use raylib::consts::*;
 
     const WINDOW_WIDTH: i32 = 640;
@@ -84,11 +83,11 @@ pub fn interact(mut p: Problem) {
     let (mut rh, thread) = raylib::init().size(WINDOW_HEIGHT, WINDOW_WIDTH).build();
 
     while !rh.window_should_close() {
-        let t = Translator::new(&rh, &p);
+        let t = Translator::new(&rh, &problem);
         {
             let mut d = rh.begin_drawing(&thread);
             d.clear_background(Color::WHITE);
-            render_problem(&mut d, &t, &p);
+            render_problem(&mut d, &t, &problem, &pose);
         }
 
         if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON)
@@ -101,8 +100,8 @@ pub fn interact(mut p: Problem) {
             if targets.len() > 0 {
                 // TODO: Consider choosing the nearest target?
                 let target = targets[0];
-                let idx = p.figure.vertices.iter().position(|&p| p == target).unwrap();
-                p.figure.vertices[idx] = mouse_pos;
+                let idx = pose.vertices.iter().position(|&p| p == target).unwrap();
+                pose.vertices[idx] = mouse_pos;
             }
         }
 

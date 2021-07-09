@@ -21,7 +21,12 @@ impl Figure {
             vertex_edges[e.1].push((i, e.0));
         }
 
-        let figure = Self { vertices, edges, vertex_edges, epsilon };
+        let figure = Self {
+            vertices,
+            edges,
+            vertex_edges,
+            epsilon,
+        };
         return figure;
     }
 
@@ -72,7 +77,10 @@ impl Problem {
                     .into_iter()
                     .map(|p| Point::new(p[0], p[1]))
                     .collect(),
-                edges.into_iter().map(|e| (e[0] as usize, e[1] as usize)).collect(),
+                edges
+                    .into_iter()
+                    .map(|e| (e[0] as usize, e[1] as usize))
+                    .collect(),
                 epsilon as f64 / 1_000_000.0f64,
             ),
         })

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-mod id;
 mod annealing;
+mod id;
 
 use crate::problem::{Pose, Problem};
 

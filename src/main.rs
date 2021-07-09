@@ -1,4 +1,5 @@
 use clap::App;
+use clap::Arg;
 use problem::Pose;
 use problem::Problem;
 use render::interact;
@@ -36,7 +37,11 @@ fn main() -> Result<()> {
                 .arg("<INPUT> path/to/problems")
                 .arg("<OUTPUT> path/to/solutions"),
         )
-        .subcommand(App::new("render").arg("<INPUT> path/to/N.problem"))
+        .subcommand(
+            App::new("render")
+                .arg("<INPUT> path/to/N.problem")
+                .arg(Arg::new("SOLUTION").short('s').takes_value(true)),
+        )
         .subcommand(
             App::new("download")
                 .arg("<ID> problem N")
@@ -128,9 +133,17 @@ fn main() -> Result<()> {
             }
         }
         Some(("render", matches)) => {
-            let problem = matches.value_of("INPUT").unwrap();
-            let data = std::fs::read(&problem)?;
-            interact(Problem::from_json(&data).unwrap());
+            let problem = Problem::from_json(&std::fs::read(matches.value_of("INPUT").unwrap())?)?;
+            let pose = match matches.value_of("SOLUTION") {
+                Some(p) => {
+                    Pose::from_json(&std::fs::read(p).expect("Failed to read solution file"))
+                        .expect("Failed to parse solution file")
+                }
+                None => Pose {
+                    vertices: problem.figure.vertices.clone(),
+                },
+            };
+            interact(problem, pose);
         }
         Some(("download", matches)) => {
             portal::SESSION.download_problem(
