@@ -1,7 +1,6 @@
-use geo::prelude::Contains;
+use geo::relate::Relate;
 use ordered_float::NotNan;
 use serde_derive::{Deserialize, Serialize};
-use geo::relate::Relate;
 
 use crate::common::*;
 
@@ -67,10 +66,14 @@ pub struct Problem {
 
 impl Problem {
     pub fn new(hole: Vec<Point>, figure: Figure) -> Self {
-        let mut border: Vec<geo::Point<f64>> = hole.clone().into_iter().map(|p| geo::Point::new(p.x() as f64, p.y() as f64)).collect();
+        let mut border: Vec<geo::Point<f64>> = hole
+            .clone()
+            .into_iter()
+            .map(|p| geo::Point::new(p.x() as f64, p.y() as f64))
+            .collect();
         border.push(border[0]);
 
-        Self { 
+        Self {
             hole: hole,
             poly: geo::Polygon::new(geo::LineString::from(border), vec![]),
             figure: figure,
@@ -119,8 +122,8 @@ impl Problem {
         for p in &pose.vertices {
             let fp = geo::Point::new(p.x() as f64, p.y() as f64);
             let relation = self.poly.relate(&fp);
-            if ! (relation.is_within() || relation.is_intersects()) {
-                return false
+            if !(relation.is_within() || relation.is_intersects()) {
+                return false;
             }
         }
         // TODO(acherepanov): Take into account that segments could be out of the polygon as well.
@@ -128,7 +131,7 @@ impl Problem {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Pose {
     pub vertices: Vec<Point>,
 }

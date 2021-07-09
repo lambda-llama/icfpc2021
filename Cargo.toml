@@ -8,6 +8,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 clap = "3.0.0-beta.2"
+generator = "0.7.0"
 geo = "0.18.0"
 lazy_static = "1.4"
 ordered-float = "2.6"

@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::{thread, time};
 
 use ordered_float::NotNan;
@@ -5,6 +7,7 @@ use raylib::prelude::*;
 
 use crate::common::*;
 use crate::problem::{Figure, Point, Pose, Problem};
+use crate::solver::Solver;
 
 struct Translator {
     x_offset: f32,
@@ -125,7 +128,7 @@ fn hit_test(pose: &Pose, mouse_pos: Point, dist: i64) -> Option<usize> {
     }
 }
 
-pub fn interact(problem: Problem, mut pose: Pose) -> Result<()> {
+pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> Result<()> {
     use raylib::consts::*;
 
     const WINDOW_WIDTH: i32 = 1024;
@@ -146,22 +149,26 @@ pub fn interact(problem: Problem, mut pose: Pose) -> Result<()> {
         VIEWPORT_HEIGHT,
         &problem,
     );
+
+    let mut gen = solver.solve_gen(&problem, Rc::new(RefCell::new(pose)));
+    let pose = gen.resume().unwrap();
+
     while !rh.window_should_close() {
         {
             rh.set_window_title(&thread,&format!(
                 "eps: {}; dlike_score: {}; inside: {}",
                 problem.figure.epsilon,
-                problem.dislikes(&pose),
-                problem.validate(&pose),
+                problem.dislikes(&pose.borrow()),
+                problem.validate(&pose.borrow()),
             ));
             let mut d = rh.begin_drawing(&thread);
             d.clear_background(Color::WHITE);
-            render_problem(&mut d, &t, &problem, &pose);
+            render_problem(&mut d, &t, &problem, &pose.borrow());
         }
 
         if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             let mouse_pos = t.untranslate(&rh.get_mouse_position());
-            dragged_point = hit_test(&pose, mouse_pos, 2);
+            dragged_point = hit_test(&pose.borrow(), mouse_pos, 2);
         }
 
         if rh.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON) {
@@ -171,20 +178,26 @@ pub fn interact(problem: Problem, mut pose: Pose) -> Result<()> {
         if rh.get_gesture_detected() == GestureType::GESTURE_DRAG {
             let mouse_pos = t.untranslate(&rh.get_mouse_position());
             if let Some(idx) = dragged_point {
-                pose.vertices[idx] = mouse_pos;
+                pose.borrow_mut().vertices[idx] = mouse_pos;
             }
         }
 
         if let Some(key) = rh.get_key_pressed() {
             match key {
                 KeyboardKey::KEY_S => {
-                    std::fs::write("./current.solution", pose.to_json()?)?;
+                    std::fs::write("./current.solution", pose.borrow().to_json()?)?;
                 }
                 _ => {}
             }
         }
 
-        thread::sleep(time::Duration::from_millis(5));
+        if rh.is_key_down(KeyboardKey::KEY_D) {
+            if gen.resume().is_none() {
+                println!("WARNING: No more steps in the solver");
+            }
+        }
+
+        thread::sleep(time::Duration::from_millis(15));
     }
     Ok(())
 }

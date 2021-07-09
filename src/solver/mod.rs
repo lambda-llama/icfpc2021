@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 mod annealing;
 mod id;
@@ -6,7 +6,23 @@ mod id;
 use crate::problem::{Pose, Problem};
 
 pub trait Solver: Sync {
-    fn solve(&self, problem: &Problem) -> Pose;
+    fn solve_gen<'a>(
+        &self,
+        problem: &'a Problem,
+        pose: Rc<RefCell<Pose>>,
+    ) -> generator::LocalGenerator<'a, (), Rc<RefCell<Pose>>>;
+
+    fn solve(&self, problem: &Problem) -> Pose {
+        self.solve_gen(
+            problem,
+            Rc::new(RefCell::new(Pose {
+                vertices: problem.figure.vertices.clone(),
+            })),
+        )
+        .last()
+        .unwrap()
+        .take()
+    }
 }
 
 lazy_static! {

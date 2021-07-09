@@ -5,6 +5,8 @@ use problem::Problem;
 use render::interact;
 
 #[macro_use]
+extern crate generator;
+#[macro_use]
 extern crate lazy_static;
 
 mod common;
@@ -40,6 +42,7 @@ fn main() -> Result<()> {
         .subcommand(
             App::new("render")
                 .arg("<INPUT> path/to/N.problem")
+                .arg(Arg::new("SOLVER").short('a').takes_value(true))
                 .arg(Arg::new("SOLUTION").short('s').takes_value(true)),
         )
         .subcommand(
@@ -54,8 +57,7 @@ fn main() -> Result<()> {
         )
         .subcommand(App::new("stats").arg("<INPUT> path/to/problems"));
 
-    let matches = app.get_matches();
-    match matches.subcommand() {
+    match app.get_matches().subcommand() {
         Some(("run", matches)) => {
             let problem = matches.value_of("INPUT").unwrap();
             let data = std::fs::read(&problem)?;
@@ -144,7 +146,13 @@ fn main() -> Result<()> {
                     vertices: problem.figure.vertices.clone(),
                 },
             };
-            interact(problem, pose)?;
+            let solver = match matches.value_of("SOLVER") {
+                Some(name) => solver::SOLVERS
+                    .get(name)
+                    .expect(&format!("Failed to find solver '{}'", name)),
+                None => &solver::SOLVERS["id"],
+            };
+            interact(problem, solver, pose)?;
         }
         Some(("download", matches)) => {
             portal::SESSION.download_problem(
