@@ -1,3 +1,4 @@
+use clap::App;
 use problem::Problem;
 use raylib::prelude::*;
 use std::{thread, time};
@@ -98,23 +99,31 @@ impl Solver {
 }
 
 fn main() -> Result<()> {
-    // TODO: viz vs non-viz switch
-    if true {
-        let problem = std::env::args().nth(1).expect("Usage: APP <problem>");
-        let data = std::fs::read(&problem)?;
-        let problem = Problem::from_json(&data);
-        println!("{:?}", problem);
-        // TODO
-    } else {
-        let mut solver = Solver::new(true);
-        loop {
-            solver.run_solve_step();
-            solver.draw();
-            if solver.process_events() {
-                return Ok(());
-            }
-            thread::sleep(time::Duration::from_millis(50));
+    let matches = App::new("icfpc2021")
+        .arg("<INPUT> path/to/N.problem")
+        .subcommand(App::new("run"))
+        .subcommand(App::new("render"))
+        .get_matches();
+
+    match matches.subcommand_name() {
+        Some("run") => {
+            let problem = matches.value_of("INPUT").unwrap();
+            let data = std::fs::read(&problem)?;
+            let problem = Problem::from_json(&data);
+            println!("{:?}", problem);
         }
+        Some("render") => {
+            let mut solver = Solver::new(true);
+            loop {
+                solver.run_solve_step();
+                solver.draw();
+                if solver.process_events() {
+                    return Ok(());
+                }
+                thread::sleep(time::Duration::from_millis(50));
+            }
+        }
+        _ => (),
     }
     Ok(())
 }
