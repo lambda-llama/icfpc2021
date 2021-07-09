@@ -1,5 +1,7 @@
 use serde_derive::{Deserialize, Serialize};
 
+use crate::common::*;
+
 #[derive(Debug)]
 pub struct Point {
     pub x: u64,
@@ -20,7 +22,7 @@ pub struct Problem {
 }
 
 impl Problem {
-    pub fn from_json(data: &[u8]) -> serde_json::Result<Self> {
+    pub fn from_json(data: &[u8]) -> Result<Self> {
         let RawProblem {
             hole,
             figure: RawFigure { vertices, edges },
@@ -49,11 +51,11 @@ pub struct Pose {
 }
 
 impl Pose {
-    pub fn to_json(&self) -> serde_json::Result<String> {
+    pub fn to_json(&self) -> Result<String> {
         let pose = RawPose {
             vertices: self.vertices.iter().map(|p| vec![p.x, p.y]).collect()
         };
-        serde_json::to_string(&pose)
+        Ok(serde_json::to_string(&pose)?)
     }
 }
 

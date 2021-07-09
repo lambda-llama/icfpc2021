@@ -3,9 +3,14 @@ use problem::Problem;
 use raylib::prelude::*;
 use std::{thread, time};
 
+#[macro_use]
+extern crate lazy_static;
+
+mod common;
+mod portal;
 mod problem;
 
-type Result<T> = std::result::Result<T, anyhow::Error>;
+use crate::common::*;
 
 // Graphics related settings.
 const WINDOW_WIDTH: i32 = 640;
