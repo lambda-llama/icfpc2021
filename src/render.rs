@@ -1,8 +1,9 @@
 use std::{thread, time};
 
+use ordered_float::NotNan;
 use raylib::prelude::*;
 
-use crate::problem::{Point, Pose, Problem};
+use crate::problem::{Figure, Point, Pose, Problem};
 
 struct Translator {
     zero: Point,
@@ -75,6 +76,24 @@ fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, p
     }
 }
 
+fn hit_test(pose: &Pose, mouse_pos: Point, dist: i64) -> Option<usize> {
+    let mut points_with_dist = pose
+        .vertices
+        .iter()
+        .enumerate()
+        .map(|(i, &p)| {
+            let dist = NotNan::new(Figure::distance(p, mouse_pos)).unwrap();
+            (i, dist)
+        })
+        .collect::<Vec<_>>();
+    points_with_dist.sort_unstable_by_key(|p| p.1);
+    if points_with_dist[0].1.into_inner() < dist as f64 {
+        Some(points_with_dist[0].0)
+    } else {
+        None
+    }
+}
+
 pub fn interact(problem: Problem, mut pose: Pose) {
     use raylib::consts::*;
 
@@ -82,6 +101,7 @@ pub fn interact(problem: Problem, mut pose: Pose) {
     const WINDOW_HEIGHT: i32 = 480;
     let (mut rh, thread) = raylib::init().size(WINDOW_HEIGHT, WINDOW_WIDTH).build();
 
+    let mut dragged_point = None;
     while !rh.window_should_close() {
         let t = Translator::new(&rh, &problem);
         {
@@ -90,17 +110,18 @@ pub fn interact(problem: Problem, mut pose: Pose) {
             render_problem(&mut d, &t, &problem, &pose);
         }
 
-        if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON)
-            || rh.get_gesture_detected() == GestureType::GESTURE_DRAG
-        {
-            // let kd = kd_tree::KdTree::build(p.figure.vertices.clone());
+        if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             let mouse_pos = t.untranslate(&rh.get_mouse_position());
-            // let targets = kd.within_radius(&mouse_pos, 2);
-            let targets: Vec<Point> = vec![]; // TODO
-            if targets.len() > 0 {
-                // TODO: Consider choosing the nearest target?
-                let target = targets[0];
-                let idx = pose.vertices.iter().position(|&p| p == target).unwrap();
+            dragged_point = hit_test(&pose, mouse_pos, 2);
+        }
+
+        if rh.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON) {
+            dragged_point = None;
+        }
+
+        if rh.get_gesture_detected() == GestureType::GESTURE_DRAG {
+            let mouse_pos = t.untranslate(&rh.get_mouse_position());
+            if let Some(idx) = dragged_point {
                 pose.vertices[idx] = mouse_pos;
             }
         }
