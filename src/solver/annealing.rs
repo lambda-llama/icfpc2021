@@ -15,6 +15,7 @@ const T_DECAY: f64 = 0.97;
 const DX: [i64; 4] = [0, 1, 0, -1];
 const DY: [i64; 4] = [1, 0, -1, 0];
 
+#[derive(Default)]
 pub struct AnnealingSolver {}
 
 impl Solver for AnnealingSolver {

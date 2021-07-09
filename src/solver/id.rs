@@ -4,6 +4,7 @@ use crate::problem::{Pose, Problem};
 
 use super::Solver;
 
+#[derive(Default)]
 pub struct IdSolver {}
 
 impl Solver for IdSolver {

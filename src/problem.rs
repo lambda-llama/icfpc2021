@@ -150,6 +150,22 @@ impl Problem {
         }
         return self.poly.euclidean_distance(&p);
     }
+
+    pub fn bounding_box(&self) -> (Point, Point) {
+        let mut min_p = Point {
+            x: i64::MAX,
+            y: i64::MAX,
+        };
+        let mut max_p = Point { x: 0, y: 0 };
+        let it = self.hole.iter().chain(self.hole.iter());
+        for p in it {
+            min_p.x = std::cmp::min(min_p.x, p.x);
+            max_p.x = std::cmp::max(max_p.x, p.x);
+            min_p.y = std::cmp::min(min_p.y, p.y);
+            max_p.y = std::cmp::max(max_p.y, p.y);
+        }
+        return (min_p, max_p);
+    }
 }
 
 #[derive(Clone, Debug, Default)]
