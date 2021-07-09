@@ -51,28 +51,54 @@ fn bounding_box(p: &Problem) -> (Point, Point) {
     return (min_p, max_p);
 }
 
+// TODO: bool => enum (ok, close to bad, bad)
+fn test_edge_length(figure: &Figure, pose: &Pose, idx: usize) -> bool {
+    let (min, max) = figure.edge_len_bounds(idx);
+    let len = figure.edge_len(idx, pose);
+    if len < min || len > max {
+        false
+    } else {
+        true
+    }
+}
+
 fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, pose: &Pose) {
     const POINT_RADIUS: f32 = 5.0;
+    const LINE_THICKNESS_HOLE: f32 = 4.0;
+    const LINE_THICKNESS_EDGE: f32 = 2.5;
+    const COLOR_HOLE: Color = Color::BLACK;
+    const COLOR_VERTEX: Color = Color::DARKGREEN;
+    const COLOR_EDGE_OK: Color = Color::GREEN;
+    const COLOR_EDGE_BAD: Color = Color::RED;
 
     let mut last_p: Option<&Point> = problem.hole.last();
     for p in problem.hole.iter() {
-        d.draw_circle_v(t.translate(&p), POINT_RADIUS, Color::BLACK);
+        d.draw_circle_v(t.translate(&p), POINT_RADIUS, COLOR_HOLE);
         match last_p {
-            Some(pp) => d.draw_line_v(t.translate(&pp), t.translate(&p), Color::BLACK),
+            Some(pp) => d.draw_line_ex(
+                t.translate(&pp),
+                t.translate(&p),
+                LINE_THICKNESS_HOLE,
+                COLOR_HOLE,
+            ),
             None => {}
         }
         last_p = Some(p);
     }
 
-    for p in pose.vertices.iter() {
-        d.draw_circle_v(t.translate(p), POINT_RADIUS, Color::RED);
-    }
-    for (i, j) in problem.figure.edges.iter() {
-        d.draw_line_v(
+    for (idx, (i, j)) in problem.figure.edges.iter().enumerate() {
+        d.draw_line_ex(
             t.translate(&pose.vertices[*i as usize]),
             t.translate(&pose.vertices[*j as usize]),
-            Color::RED,
+            LINE_THICKNESS_EDGE,
+            match test_edge_length(&problem.figure, pose, idx) {
+                true => COLOR_EDGE_OK,
+                false => COLOR_EDGE_BAD,
+            },
         );
+    }
+    for p in pose.vertices.iter() {
+        d.draw_circle_v(t.translate(p), POINT_RADIUS, COLOR_VERTEX);
     }
 }
 
