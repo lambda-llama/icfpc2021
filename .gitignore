@@ -14,3 +14,5 @@ Cargo.lock
 
 # Ignore subfolders in the solutions folder, only keep the final results
 solutions/*/**
+# Ignore the temp solution file
+/current.solution

@@ -3,6 +3,7 @@ use std::{thread, time};
 use ordered_float::NotNan;
 use raylib::prelude::*;
 
+use crate::common::*;
 use crate::problem::{Figure, Point, Pose, Problem};
 
 struct Translator {
@@ -124,7 +125,7 @@ fn hit_test(pose: &Pose, mouse_pos: Point, dist: i64) -> Option<usize> {
     }
 }
 
-pub fn interact(problem: Problem, mut pose: Pose) {
+pub fn interact(problem: Problem, mut pose: Pose) -> Result<()> {
     use raylib::consts::*;
 
     const WINDOW_WIDTH: i32 = 1024;
@@ -168,6 +169,16 @@ pub fn interact(problem: Problem, mut pose: Pose) {
             }
         }
 
+        if let Some(key) = rh.get_key_pressed() {
+            match key {
+                KeyboardKey::KEY_S => {
+                    std::fs::write("./current.solution", pose.to_json()?)?;
+                }
+                _ => {}
+            }
+        }
+
         thread::sleep(time::Duration::from_millis(5));
     }
+    Ok(())
 }
