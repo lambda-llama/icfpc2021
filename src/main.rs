@@ -138,14 +138,13 @@ fn main() -> Result<()> {
             }
         }
         Some(("download", matches)) => {
-            portal::Session::download_problem(
+            portal::SESSION.download_problem(
                 matches.value_of("ID").unwrap().parse()?,
                 matches.value_of("PATH").unwrap(),
             )?;
         }
         Some(("upload", matches)) => {
-            let session = portal::Session::new()?;
-            session.upload_solution(
+            portal::SESSION.upload_solution(
                 matches.value_of("ID").unwrap().parse()?,
                 matches.value_of("PATH").unwrap(),
             )?;

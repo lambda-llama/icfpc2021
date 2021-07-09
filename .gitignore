@@ -11,5 +11,3 @@ Cargo.lock
 
 # Python notebook checkpoints.
 .ipynb_checkpoints
-
-.credentials
