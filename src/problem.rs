@@ -126,14 +126,20 @@ impl Problem {
     }
 
     pub fn validate(&self, pose: &Pose) -> bool {
+        let to_fp = |p: &&Point| geo::Point::new(p.x as f64, p.y as f64);
         for p in &pose.vertices {
-            let fp = geo::Point::new(p.x as f64, p.y as f64);
-            let relation = self.poly.relate(&fp);
+            let relation = self.poly.relate(&to_fp(&p));
             if !(relation.is_within() || relation.is_intersects()) {
                 return false;
             }
         }
-        // TODO(acherepanov): Take into account that segments could be out of the polygon as well.
+        for (u, v)in &self.figure.edges {
+            let s = geo::LineString::from(vec![to_fp(&&pose.vertices[*u]), to_fp(&&pose.vertices[*v])]);
+            let relation = self.poly.relate(&s);
+            if !relation.is_contains() {
+                return false
+            }
+        }
         true
     }
 
