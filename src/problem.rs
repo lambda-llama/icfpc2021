@@ -18,7 +18,7 @@ pub struct Figure {
 pub struct Problem {
     pub hole: Vec<Point>,
     pub figure: Figure,
-    pub epsilon: u64,
+    pub epsilon: f64,
 }
 
 impl Problem {
@@ -40,7 +40,7 @@ impl Problem {
                     .collect(),
                 edges: edges.into_iter().map(|e| (e[0], e[1])).collect(),
             },
-            epsilon,
+            epsilon: epsilon as f64 / 1_000_000.0f64,
         })
     }
 }
