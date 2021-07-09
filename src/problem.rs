@@ -4,8 +4,8 @@ use crate::common::*;
 
 #[derive(Debug)]
 pub struct Point {
-    pub x: u64,
-    pub y: u64,
+    pub x: i64,
+    pub y: i64,
 }
 
 #[derive(Debug)]
@@ -63,18 +63,18 @@ impl Pose {
 
 #[derive(Deserialize)]
 struct RawFigure {
-    pub vertices: Vec<Vec<u64>>,
+    pub vertices: Vec<Vec<i64>>,
     pub edges: Vec<Vec<u64>>,
 }
 
 #[derive(Deserialize)]
 struct RawProblem {
-    pub hole: Vec<Vec<u64>>,
+    pub hole: Vec<Vec<i64>>,
     pub figure: RawFigure,
     pub epsilon: u64,
 }
 
 #[derive(Serialize)]
 struct RawPose {
-    pub vertices: Vec<Vec<u64>>,
+    pub vertices: Vec<Vec<i64>>,
 }
