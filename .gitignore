@@ -11,3 +11,6 @@ Cargo.lock
 
 # Python notebook checkpoints.
 .ipynb_checkpoints
+
+# Ignore subfolders in the solutions folder, only keep the final results
+solutions/*/**

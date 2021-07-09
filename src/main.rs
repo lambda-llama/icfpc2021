@@ -23,6 +23,12 @@ fn main() -> Result<()> {
                 .arg("<INPUT> path/to/N.problem")
                 .arg("<OUTPUT> path/to/N.solution"),
         )
+        .subcommand(
+            App::new("solve")
+                .arg("<SOLVER> solver name")
+                .arg("<INPUT> path/to/problems")
+                .arg("<OUTPUT> path/to/solutions"),
+        )
         .subcommand(App::new("render").arg("<INPUT> path/to/N.problem"))
         .subcommand(
             App::new("download")
@@ -51,6 +57,30 @@ fn main() -> Result<()> {
             println!("{:?}", pose);
             let json = pose.to_json()?;
             std::fs::write(matches.value_of("OUTPUT").unwrap(), json)?;
+        }
+        Some(("solve", matches)) => {
+            let name = matches.value_of("SOLVER").unwrap();
+            let solver = solver::SOLVERS
+                .get(name)
+                .expect(&format!("Failed to find solver '{}'", name));
+            let problems_path = std::path::Path::new(matches.value_of("INPUT").unwrap());
+            let solutions_path =
+                std::path::Path::new(matches.value_of("OUTPUT").unwrap()).join(name);
+            std::fs::create_dir_all(&solutions_path)?;
+            // NOTE: we're assuming the files are named N.problem as this allows to iterate them in order
+            let count = problems_path.read_dir()?.count();
+            for i in 1..=count {
+                let problem = Problem::from_json(&std::fs::read(
+                    problems_path.join(format!("{}.problem", i)),
+                )?)?;
+                println!("Solving {}", i);
+                let pose = solver.solve(&problem);
+                println!("Done, dislikes = {}", problem.dislikes(&pose));
+                std::fs::write(
+                    solutions_path.join(format!("{}.solution", i)),
+                    pose.to_json()?,
+                )?;
+            }
         }
         Some(("render", matches)) => {
             let problem = matches.value_of("INPUT").unwrap();

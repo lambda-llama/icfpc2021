@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+mod id;
+
 use crate::problem::{Pose, Problem};
 
 pub trait Solver: Sync {
@@ -8,8 +10,9 @@ pub trait Solver: Sync {
 
 lazy_static! {
     pub static ref SOLVERS: HashMap<String, Box<dyn Solver>> = {
-        let map = HashMap::new();
-        // TODO: add solvers here
+        let mut map: HashMap<String, Box<dyn Solver>> = HashMap::new();
+        // Add solvers here
+        map.insert("id".to_owned(), Box::new(id::IdSolver {})); // Dummy solver for testing the runner
         map
     };
 }
