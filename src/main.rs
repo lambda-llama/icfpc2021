@@ -107,7 +107,7 @@ fn main() -> Result<()> {
                     problems_path.join(format!("{}.problem", i)),
                 )?)?;
                 let solution_path = solutions_base_path.join(format!("{}.solution", i));
-                let best_dislikes = if solution_path.exists() {
+                let mut best_dislikes = if solution_path.exists() {
                     problem.dislikes(&Pose::from_json(&std::fs::read(&solution_path)?)?)
                 } else {
                     u64::MAX
@@ -130,6 +130,7 @@ fn main() -> Result<()> {
                                 best_dislikes, dislikes
                             );
                             std::fs::copy(current_solution_path, &solution_path)?;
+                            best_dislikes = dislikes;
                         }
                     }
                 }
