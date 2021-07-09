@@ -56,12 +56,8 @@ impl Solver for AnnealingSolver {
                     let vertex_distance = problem.min_distance_to(new_pos);
                     let delta_distance = vertex_distance - vertex_distances[vertex_index];
 
-                    let new_vertex_edge_violation = edges_violation_after_move(
-                        vertex_index,
-                        new_pos,
-                        &pose,
-                        &problem.figure,
-                    );
+                    let new_vertex_edge_violation =
+                        edges_violation_after_move(vertex_index, new_pos, &pose, &problem.figure);
                     let delta_violation =
                         new_vertex_edge_violation - vertex_edge_violation[vertex_index];
 
