@@ -56,7 +56,7 @@ impl Problem {
             hole,
             figure: RawFigure { vertices, edges },
             epsilon,
-        } = serde_json::from_slice(&data)?;
+        } = serde_json::from_slice(data)?;
         Ok(Problem {
             hole: hole
                 .into_iter()
@@ -77,20 +77,23 @@ impl Problem {
     }
 
     pub fn dislikes(&self, pose: &Pose) -> u64 {
-        let sum: f64 = self.hole.iter().map(|&v|
-            pose
-                .vertices
-                .iter()
-                .map(|&p| NotNan::new(Figure::distance(p, v)).unwrap())
-                .min()
-                .unwrap()
-                .into_inner()
-        ).sum();
+        let sum: f64 = self
+            .hole
+            .iter()
+            .map(|&v| {
+                pose.vertices
+                    .iter()
+                    .map(|&p| NotNan::new(Figure::distance(p, v)).unwrap())
+                    .min()
+                    .unwrap()
+                    .into_inner()
+            })
+            .sum();
         sum.trunc() as u64
     }
 
     pub fn validate(&self, pose: &Pose) -> bool {
-        true
+        false // TODO
     }
 }
 
@@ -100,23 +103,21 @@ pub struct Pose {
 }
 
 impl Pose {
-    pub fn to_json(&self) -> Result<String> {
-        let pose = RawPose {
-            vertices: self.vertices.iter().map(|p| vec![p.x, p.y]).collect(),
-        };
-        Ok(serde_json::to_string(&pose)?)
-    }
-
     pub fn from_json(data: &[u8]) -> Result<Self> {
-        let RawPose {
-            vertices,
-        } = serde_json::from_slice(&data)?;
+        let RawPose { vertices } = serde_json::from_slice(data)?;
         Ok(Pose {
             vertices: vertices
                 .into_iter()
                 .map(|p| Point { x: p[0], y: p[1] })
                 .collect(),
         })
+    }
+
+    pub fn to_json(&self) -> Result<String> {
+        let pose = RawPose {
+            vertices: self.vertices.iter().map(|p| vec![p.x, p.y]).collect(),
+        };
+        Ok(serde_json::to_string(&pose)?)
     }
 }
 
@@ -136,8 +137,7 @@ struct RawProblem {
     pub epsilon: u64,
 }
 
-#[derive(Serialize)]
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct RawPose {
     pub vertices: Vec<Vec<i64>>,
 }
