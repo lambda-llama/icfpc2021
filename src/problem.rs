@@ -1,6 +1,8 @@
 use geo::relate::Relate;
 use ordered_float::NotNan;
 use serde_derive::{Deserialize, Serialize};
+use geo::algorithm::euclidean_distance::EuclideanDistance;
+use geo::algorithm::contains::Contains;
 
 use crate::common::*;
 
@@ -129,9 +131,17 @@ impl Problem {
         // TODO(acherepanov): Take into account that segments could be out of the polygon as well.
         true
     }
+
+    pub fn min_distance_to(&self, point: Point) -> f64 {
+        let p = geo::Point::new(point.x() as f64, point.y() as f64);
+        if self.poly.contains(&p) {
+            return 0.0;
+        }
+        return self.poly.euclidean_distance(&p);
+    }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Pose {
     pub vertices: Vec<Point>,
 }
