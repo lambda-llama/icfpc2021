@@ -11,12 +11,18 @@ mod common;
 mod portal;
 mod problem;
 mod render;
+mod solver;
 
 use crate::common::*;
 
 fn main() -> Result<()> {
     let app = App::new("icfpc2021")
-        .subcommand(App::new("run").arg("<INPUT> path/to/N.problem"))
+        .subcommand(
+            App::new("run")
+                .arg("<SOLVER> solver name")
+                .arg("<INPUT> path/to/N.problem")
+                .arg("<OUTPUT> path/to/N.solution"),
+        )
         .subcommand(App::new("render").arg("<INPUT> path/to/N.problem"))
         .subcommand(
             App::new("download")
@@ -34,8 +40,17 @@ fn main() -> Result<()> {
         Some(("run", matches)) => {
             let problem = matches.value_of("INPUT").unwrap();
             let data = std::fs::read(&problem)?;
-            let problem = Problem::from_json(&data);
+            let problem = Problem::from_json(&data)?;
+            // TODO: remove these debug prints later
             println!("{:?}", problem);
+            let name = matches.value_of("SOLVER").unwrap();
+            let pose = solver::SOLVERS
+                .get(name)
+                .expect(&format!("Failed to find solver '{}'", name))
+                .solve(&problem);
+            println!("{:?}", pose);
+            let json = pose.to_json()?;
+            std::fs::write(matches.value_of("OUTPUT").unwrap(), json)?;
         }
         Some(("render", matches)) => {
             let problem = matches.value_of("INPUT").unwrap();
