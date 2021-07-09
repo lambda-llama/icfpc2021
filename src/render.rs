@@ -1,15 +1,17 @@
+use std::{thread, time};
+
 use raylib::prelude::*;
 
 use crate::problem::{Point, Problem};
 
-pub struct Translator {
+struct Translator {
     zero: Point,
     x_step: f32,
     y_step: f32,
 }
 
 impl Translator {
-    pub fn new(rh: &RaylibHandle, p: &Problem) -> Translator {
+    fn new(rh: &RaylibHandle, p: &Problem) -> Translator {
         let (min_p, max_p) = bounding_box(p);
         let x_step = (rh.get_screen_width() as f32) / ((max_p.x - min_p.x) as f32);
         let y_step = (rh.get_screen_height() as f32) / ((max_p.y - min_p.y) as f32);
@@ -25,6 +27,13 @@ impl Translator {
             ((p.x - self.zero.x) as f32) * self.x_step,
             ((p.y - self.zero.y) as f32) * self.y_step,
         );
+    }
+
+    fn untranslate(&self, v: &Vector2) -> Point {
+        return Point {
+            x: (v.x / self.x_step + (self.zero.x as f32)).round() as i64,
+            y: (v.y / self.y_step + (self.zero.y as f32)).round() as i64,
+        };
     }
 }
 
@@ -44,7 +53,7 @@ fn bounding_box(p: &Problem) -> (Point, Point) {
     return (min_p, max_p);
 }
 
-pub fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, p: &Problem) {
+fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, p: &Problem) {
     const POINT_RADIUS: f32 = 5.0;
 
     let mut last_p: Option<&Point> = p.hole.last();
@@ -67,5 +76,52 @@ pub fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, p: &Problem) {
             t.translate(&fig.vertices[*j as usize]),
             Color::RED,
         );
+    }
+}
+
+pub fn interact(mut p: Problem) {
+    use raylib::consts::*;
+
+    const WINDOW_WIDTH: i32 = 640;
+    const WINDOW_HEIGHT: i32 = 480;
+    let (mut rh, thread) = raylib::init().size(WINDOW_HEIGHT, WINDOW_WIDTH).build();
+
+    while !rh.window_should_close() {
+        let t = Translator::new(&rh, &p);
+        {
+            let mut d = rh.begin_drawing(&thread);
+            d.clear_background(Color::WHITE);
+            render_problem(&mut d, &t, &p);
+        }
+
+        if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON)
+            || rh.get_gesture_detected() == GestureType::GESTURE_DRAG
+        {
+            let kd = kd_tree::KdTree::build(p.figure.vertices.clone());
+            let mouse_pos = t.untranslate(&rh.get_mouse_position());
+            let targets = kd.within_radius(&mouse_pos, 2);
+            if targets.len() > 0 {
+                // TODO: Consider choosing the nearest target?
+                let target = targets[0];
+                let idx = p
+                    .figure
+                    .vertices
+                    .iter()
+                    .position(|&p| p == *target)
+                    .unwrap();
+                p.figure.vertices[idx] = mouse_pos;
+            }
+        }
+
+        thread::sleep(time::Duration::from_millis(5));
+    }
+}
+
+impl kd_tree::KdPoint for Point {
+    type Scalar = i64;
+    type Dim = typenum::U2;
+
+    fn at(&self, i: usize) -> Self::Scalar {
+        return if i == 0 { self.x } else { self.y };
     }
 }

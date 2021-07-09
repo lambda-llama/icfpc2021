@@ -3,7 +3,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::common::*;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Point {
     pub x: i64,
     pub y: i64,

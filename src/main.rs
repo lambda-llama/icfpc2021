@@ -2,7 +2,7 @@ use clap::App;
 use problem::Problem;
 use problem::Pose;
 use raylib::prelude::*;
-use render::{render_problem, Translator};
+use render::interact;
 use std::{thread, time};
 
 #[macro_use]
@@ -86,19 +86,7 @@ fn main() -> Result<()> {
         Some(("render", matches)) => {
             let problem = matches.value_of("INPUT").unwrap();
             let data = std::fs::read(&problem)?;
-            let problem = Problem::from_json(&data).unwrap();
-
-            const WINDOW_WIDTH: i32 = 640;
-            const WINDOW_HEIGHT: i32 = 480;
-            let (mut rh, thread) = raylib::init().size(WINDOW_HEIGHT, WINDOW_WIDTH).build();
-
-            while !rh.window_should_close() {
-                let t = Translator::new(&rh, &problem);
-                let mut d = rh.begin_drawing(&thread);
-                d.clear_background(Color::WHITE);
-                render_problem(&mut d, &t, &problem);
-                thread::sleep(time::Duration::from_millis(50));
-            }
+            interact(Problem::from_json(&data).unwrap());
         }
         Some(("download", matches)) => {
             portal::SESSION.download_problem(
