@@ -3,11 +3,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::common::*;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Point {
-    pub x: i64,
-    pub y: i64,
-}
+pub type Point = geo::Point<i64>;
 
 #[derive(Debug)]
 pub struct Figure {
@@ -18,7 +14,7 @@ pub struct Figure {
 
 impl Figure {
     pub fn distance(p: Point, q: Point) -> f64 {
-        ((p.x - q.x) as f64).powi(2) + ((p.y - q.y) as f64).powi(2)
+        ((p.x() - q.x()) as f64).powi(2) + ((p.y() - q.y()) as f64).powi(2)
     }
 
     pub fn edge_len(&self, idx: usize, pose: &Pose) -> f64 {
@@ -58,14 +54,11 @@ impl Problem {
             epsilon,
         } = serde_json::from_slice(data)?;
         Ok(Problem {
-            hole: hole
-                .into_iter()
-                .map(|p| Point { x: p[0], y: p[1] })
-                .collect(),
+            hole: hole.into_iter().map(|p| Point::new(p[0], p[1])).collect(),
             figure: Figure {
                 vertices: vertices
                     .into_iter()
-                    .map(|p| Point { x: p[0], y: p[1] })
+                    .map(|p| Point::new(p[0], p[1]))
                     .collect(),
                 edges: edges
                     .into_iter()
@@ -108,14 +101,14 @@ impl Pose {
         Ok(Pose {
             vertices: vertices
                 .into_iter()
-                .map(|p| Point { x: p[0], y: p[1] })
+                .map(|p| Point::new(p[0], p[1]))
                 .collect(),
         })
     }
 
     pub fn to_json(&self) -> Result<String> {
         let pose = RawPose {
-            vertices: self.vertices.iter().map(|p| vec![p.x, p.y]).collect(),
+            vertices: self.vertices.iter().map(|p| vec![p.x(), p.y()]).collect(),
         };
         Ok(serde_json::to_string(&pose)?)
     }

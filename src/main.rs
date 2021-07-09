@@ -1,9 +1,7 @@
 use clap::App;
 use problem::Pose;
 use problem::Problem;
-use raylib::prelude::*;
 use render::interact;
-use std::{thread, time};
 
 #[macro_use]
 extern crate lazy_static;

@@ -13,8 +13,8 @@ struct Translator {
 impl Translator {
     fn new(rh: &RaylibHandle, p: &Problem) -> Translator {
         let (min_p, max_p) = bounding_box(p);
-        let x_step = (rh.get_screen_width() as f32) / ((max_p.x - min_p.x) as f32);
-        let y_step = (rh.get_screen_height() as f32) / ((max_p.y - min_p.y) as f32);
+        let x_step = (rh.get_screen_width() as f32) / ((max_p.x() - min_p.x()) as f32);
+        let y_step = (rh.get_screen_height() as f32) / ((max_p.y() - min_p.y()) as f32);
         return Translator {
             zero: min_p,
             x_step,
@@ -24,31 +24,28 @@ impl Translator {
 
     fn translate(&self, p: &Point) -> Vector2 {
         return Vector2::new(
-            ((p.x - self.zero.x) as f32) * self.x_step,
-            ((p.y - self.zero.y) as f32) * self.y_step,
+            ((p.x() - self.zero.x()) as f32) * self.x_step,
+            ((p.y() - self.zero.y()) as f32) * self.y_step,
         );
     }
 
     fn untranslate(&self, v: &Vector2) -> Point {
-        return Point {
-            x: (v.x / self.x_step + (self.zero.x as f32)).round() as i64,
-            y: (v.y / self.y_step + (self.zero.y as f32)).round() as i64,
-        };
+        return Point::new(
+            (v.x / self.x_step + (self.zero.x() as f32)).round() as i64,
+            (v.y / self.y_step + (self.zero.y() as f32)).round() as i64,
+        );
     }
 }
 
 fn bounding_box(p: &Problem) -> (Point, Point) {
-    let mut min_p = Point {
-        x: i64::MAX,
-        y: i64::MAX,
-    };
-    let mut max_p = Point { x: 0, y: 0 };
+    let mut min_p = Point::new(i64::MAX, i64::MAX);
+    let mut max_p = Point::new(0, 0);
     let it = p.figure.vertices.iter().chain(p.hole.iter());
-    for Point { x, y } in it {
-        min_p.x = std::cmp::min(min_p.x, *x);
-        max_p.x = std::cmp::max(max_p.x, *x);
-        min_p.y = std::cmp::min(min_p.y, *y);
-        max_p.y = std::cmp::max(max_p.y, *y);
+    for p in it {
+        min_p.set_x(std::cmp::min(min_p.x(), p.x()));
+        max_p.set_x(std::cmp::max(max_p.x(), p.x()));
+        min_p.set_y(std::cmp::min(min_p.y(), p.y()));
+        max_p.set_y(std::cmp::max(max_p.y(), p.y()));
     }
     return (min_p, max_p);
 }
@@ -97,31 +94,18 @@ pub fn interact(mut p: Problem) {
         if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON)
             || rh.get_gesture_detected() == GestureType::GESTURE_DRAG
         {
-            let kd = kd_tree::KdTree::build(p.figure.vertices.clone());
+            // let kd = kd_tree::KdTree::build(p.figure.vertices.clone());
             let mouse_pos = t.untranslate(&rh.get_mouse_position());
-            let targets = kd.within_radius(&mouse_pos, 2);
+            // let targets = kd.within_radius(&mouse_pos, 2);
+            let targets: Vec<Point> = vec![]; // TODO
             if targets.len() > 0 {
                 // TODO: Consider choosing the nearest target?
                 let target = targets[0];
-                let idx = p
-                    .figure
-                    .vertices
-                    .iter()
-                    .position(|&p| p == *target)
-                    .unwrap();
+                let idx = p.figure.vertices.iter().position(|&p| p == target).unwrap();
                 p.figure.vertices[idx] = mouse_pos;
             }
         }
 
         thread::sleep(time::Duration::from_millis(5));
-    }
-}
-
-impl kd_tree::KdPoint for Point {
-    type Scalar = i64;
-    type Dim = typenum::U2;
-
-    fn at(&self, i: usize) -> Self::Scalar {
-        return if i == 0 { self.x } else { self.y };
     }
 }
