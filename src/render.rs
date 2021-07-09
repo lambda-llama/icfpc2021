@@ -148,6 +148,7 @@ pub fn interact(problem: Problem, mut pose: Pose) -> Result<()> {
     );
     while !rh.window_should_close() {
         {
+            rh.set_window_title(&thread,&format!("dlike_score: {}", problem.dislikes(&pose)));
             let mut d = rh.begin_drawing(&thread);
             d.clear_background(Color::WHITE);
             render_problem(&mut d, &t, &problem, &pose);
