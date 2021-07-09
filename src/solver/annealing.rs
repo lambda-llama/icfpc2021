@@ -22,14 +22,12 @@ impl Solver for AnnealingSolver {
     ) -> generator::LocalGenerator<'a, (), Rc<RefCell<Pose>>> {
         generator::Gn::new_scoped_local(move |mut s| {
             s.yield_(pose.clone());
-            let mut min_energy: f64 = 10000000.0;
             let mut total_vertex_distance = 0.0;
             let mut best_dislikes = problem.dislikes(&pose.borrow());
             let mut cur_dislikes = problem.dislikes(&pose.borrow());
             let mut total_vertex_violation = 0.0;
             let mut vertex_distances = vec![0.0; pose.borrow().vertices.len()];
             let mut vertex_edge_violation = vec![0.0; pose.borrow().vertices.len()];
-            let mut cur_energy = min_energy;
             for (i, vertex) in pose.borrow().vertices.iter().enumerate() {
                 vertex_distances[i] = problem.min_distance_to(*vertex);
                 total_vertex_distance += vertex_distances[i];
@@ -37,15 +35,20 @@ impl Solver for AnnealingSolver {
                     edges_violation_after_move(i, *vertex, &pose, &problem.figure);
                 total_vertex_violation += vertex_edge_violation[i]
             }
+            let mut cur_energy = problem.dislikes(&pose.borrow()) as f64
+                + 100.0 * total_vertex_distance
+                + 100.0 * total_vertex_violation;
+            let mut min_energy: f64 = cur_energy;
 
             for outer_it in 0..OUTER_IT {
                 // let step: i64 = (MAX_STEP
                 //     * ((OUTER_IT - outer_it) as f64 / OUTER_IT as f64))
                 //     .ceil() as i64;
                 let step_size = (OUTER_IT - outer_it) as i64;
-                for _ in 0..INNER_IT {
-                    let vertex_index: usize =
-                        rand::random::<usize>() % pose.borrow().vertices.len();
+                for inner_it in 0..INNER_IT {
+                    // let vertex_index: usize =
+                    //     rand::random::<usize>() % pose.borrow().vertices.len();
+                    let vertex_index: usize = inner_it % pose.borrow().vertices.len();
                     let direction: usize = rand::random::<usize>() % 4;
                     let prev_pos = pose.borrow().vertices[vertex_index];
                     let new_pos = Point{
@@ -67,7 +70,7 @@ impl Solver for AnnealingSolver {
                     let energy = dislikes as f64
                         + 100.0 * (total_vertex_distance + delta_distance)
                         + 100.0 * (total_vertex_violation + 2.0 * delta_violation);
-                    if accept_energy(cur_energy, energy, 1.0 * outer_it as f64) {
+                    if accept_energy(cur_energy, energy, 0.1 * outer_it as f64) {
                         // Move if works.
                         // Compare it with best score.
                         if energy < min_energy {
@@ -97,7 +100,7 @@ impl Solver for AnnealingSolver {
 }
 
 fn accept_energy(prev_energy: f64, new_energy: f64, temperature: f64) -> bool {
-    return (new_energy - prev_energy) / temperature < thread_rng().gen();
+    return ((prev_energy - new_energy) / temperature).exp() > thread_rng().gen();
 }
 
 fn edges_violation_after_move(
