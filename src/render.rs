@@ -187,17 +187,22 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
                 KeyboardKey::KEY_S => {
                     std::fs::write("./current.solution", pose.borrow().to_json()?)?;
                 }
+                KeyboardKey::KEY_D => {
+                    if gen.resume().is_none() {
+                        println!("WARNING: No more steps in the solver");
+                    }
+                }
                 _ => {}
             }
         }
 
-        if rh.is_key_down(KeyboardKey::KEY_D) {
+        if rh.is_key_down(KeyboardKey::KEY_F) {
             if gen.resume().is_none() {
                 println!("WARNING: No more steps in the solver");
             }
+        } else {
+            thread::sleep(time::Duration::from_millis(5));
         }
-
-        thread::sleep(time::Duration::from_millis(15));
     }
     Ok(())
 }
