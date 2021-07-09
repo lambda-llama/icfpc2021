@@ -1,5 +1,7 @@
+use geo::prelude::Contains;
 use ordered_float::NotNan;
 use serde_derive::{Deserialize, Serialize};
+use geo::relate::Relate;
 
 use crate::common::*;
 
@@ -103,7 +105,18 @@ impl Problem {
     }
 
     pub fn validate(&self, pose: &Pose) -> bool {
-        false // TODO
+        let mut border: Vec<geo::Point<f64>> = self.hole.clone().into_iter().map(|p| geo::Point::new(p.x() as f64, p.y() as f64)).collect();
+        border.push(border[0]);
+        let poly = geo::Polygon::new(geo::LineString::from(border), vec![]);
+        for p in &pose.vertices {
+            let fp = geo::Point::new(p.x() as f64, p.y() as f64);
+            let relation = poly.relate(&fp);
+            if ! (relation.is_within() || relation.is_intersects()) {
+                return false
+            }
+        }
+        // TODO(acherepanov): Take into account that segments could be out of the polygon as well.
+        true
     }
 }
 
