@@ -102,7 +102,7 @@ fn main() -> Result<()> {
     if true {
         let problem = std::env::args().nth(1).expect("Usage: APP <problem>");
         let data = std::fs::read(&problem)?;
-        let problem: Problem = serde_json::from_slice(&data)?;
+        let problem = Problem::from_json(&data);
         println!("{:?}", problem);
         // TODO
     } else {
