@@ -23,13 +23,12 @@ impl Figure {
             vertex_edges[e.1].push((i, e.0));
         }
 
-        let figure = Self {
+        Self {
             vertices,
             edges,
             vertex_edges,
             epsilon,
-        };
-        return figure;
+        }
     }
 
     pub fn distance(p: Point, q: Point) -> f64 {
@@ -62,19 +61,31 @@ impl Figure {
 #[derive(Debug)]
 pub struct Problem {
     pub hole: Vec<Point>,
+    pub poly: geo::Polygon<f64>,
     pub figure: Figure,
 }
 
 impl Problem {
+    pub fn new(hole: Vec<Point>, figure: Figure) -> Self {
+        let mut border: Vec<geo::Point<f64>> = hole.clone().into_iter().map(|p| geo::Point::new(p.x() as f64, p.y() as f64)).collect();
+        border.push(border[0]);
+
+        Self { 
+            hole: hole,
+            poly: geo::Polygon::new(geo::LineString::from(border), vec![]),
+            figure: figure,
+        }
+    }
+
     pub fn from_json(data: &[u8]) -> Result<Self> {
         let RawProblem {
             hole,
             figure: RawFigure { vertices, edges },
             epsilon,
         } = serde_json::from_slice(data)?;
-        Ok(Problem {
-            hole: hole.into_iter().map(|p| Point::new(p[0], p[1])).collect(),
-            figure: Figure::new(
+        Ok(Problem::new(
+            hole.into_iter().map(|p| Point::new(p[0], p[1])).collect(),
+            Figure::new(
                 vertices
                     .into_iter()
                     .map(|p| Point::new(p[0], p[1]))
@@ -85,7 +96,7 @@ impl Problem {
                     .collect(),
                 epsilon as f64 / 1_000_000.0f64,
             ),
-        })
+        ))
     }
 
     pub fn dislikes(&self, pose: &Pose) -> u64 {
@@ -105,12 +116,9 @@ impl Problem {
     }
 
     pub fn validate(&self, pose: &Pose) -> bool {
-        let mut border: Vec<geo::Point<f64>> = self.hole.clone().into_iter().map(|p| geo::Point::new(p.x() as f64, p.y() as f64)).collect();
-        border.push(border[0]);
-        let poly = geo::Polygon::new(geo::LineString::from(border), vec![]);
         for p in &pose.vertices {
             let fp = geo::Point::new(p.x() as f64, p.y() as f64);
-            let relation = poly.relate(&fp);
+            let relation = self.poly.relate(&fp);
             if ! (relation.is_within() || relation.is_intersects()) {
                 return false
             }
