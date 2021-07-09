@@ -21,15 +21,21 @@ struct Solver {
 }
 
 impl Solver {
-    fn new() -> Solver {
-        let (rh, thread) = raylib::init()
-            .size(WINDOW_HEIGHT, WINDOW_WIDTH)
-            .title("icfpc2021")
-            .build();
+    fn new(enable_graphics: bool) -> Solver {
+        let graphics = match enable_graphics {
+            true => {
+                let (rh, thread) = raylib::init()
+                    .size(WINDOW_HEIGHT, WINDOW_WIDTH)
+                    .title("icfpc2021")
+                    .build();
+                Some(Graphics { rh, thread })
+            }
+            false => None,
+        };
 
         Solver {
             map: vec![vec![1; ROWS]; COLS],
-            graphics: Some(Graphics { rh, thread }),
+            graphics,
         }
     }
 
@@ -41,6 +47,10 @@ impl Solver {
 
     // Call whenever you want to show the new state of the world.
     fn draw(&mut self) {
+        if self.graphics.is_none() {
+            return;
+        }
+
         // Move the graphics out to avoid borrowing `self` twice during `self.draw_impl` call.
         let mut graphics = self.graphics.take().unwrap();
         self.draw_impl(&mut graphics);
@@ -70,7 +80,7 @@ impl Solver {
 }
 
 fn main() {
-    let mut solver = Solver::new();
+    let mut solver = Solver::new(true);
     loop {
         solver.run_solve_step();
         solver.draw();
