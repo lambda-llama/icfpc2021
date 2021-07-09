@@ -182,13 +182,16 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
             }
         }
 
+        let mut need_to_sleep = true;
         if let Some(key) = rh.get_key_pressed() {
             match key {
                 KeyboardKey::KEY_S => {
                     std::fs::write("./current.solution", pose.borrow().to_json()?)?;
                 }
                 KeyboardKey::KEY_D => {
-                    if gen.resume().is_none() {
+                    if gen.resume().is_some() {
+                        need_to_sleep = false;
+                    } else {
                         println!("WARNING: No more steps in the solver");
                     }
                 }
@@ -197,10 +200,14 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
         }
 
         if rh.is_key_down(KeyboardKey::KEY_F) {
-            if gen.resume().is_none() {
+            if gen.resume().is_some() {
+                need_to_sleep = false;
+            } else {
                 println!("WARNING: No more steps in the solver");
             }
-        } else {
+        }
+
+        if need_to_sleep {
             thread::sleep(time::Duration::from_millis(5));
         }
     }

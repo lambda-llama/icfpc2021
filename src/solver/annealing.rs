@@ -66,12 +66,12 @@ impl Solver for AnnealingSolver {
                         new_vertex_edge_violation - vertex_edge_violation[vertex_index];
 
                     pose.borrow_mut().vertices[vertex_index] = new_pos;
+                    s.yield_(pose.clone());
                     let dislikes = problem.dislikes(&pose.borrow());
                     let energy = dislikes as f64
                         + 100.0 * (total_vertex_distance + delta_distance)
                         + 100.0 * (total_vertex_violation + 2.0 * delta_violation);
                     if accept_energy(cur_energy, energy, 1.0 * outer_it as f64) {
-                        s.yield_(pose.clone());
                         // Move if works.
                         // Compare it with best score.
                         if energy < min_energy {
