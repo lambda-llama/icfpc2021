@@ -1,7 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::problem::{Figure, Point, Pose, Problem};
-use rand::{thread_rng, Rng};
+use rand::Rng;
+use rand::rngs::StdRng;
 
 use super::Solver;
 
@@ -23,6 +24,7 @@ impl Solver for AnnealingSolver {
         pose: Rc<RefCell<Pose>>,
     ) -> generator::LocalGenerator<'a, (), Rc<RefCell<Pose>>> {
         generator::Gn::new_scoped_local(move |mut s| {
+            let mut rng: StdRng = rand::SeedableRng::seed_from_u64(42);
             s.yield_(pose.clone());
             let mut best_pose = pose.clone();
             let mut total_vertex_distance = 0.0;
@@ -70,7 +72,7 @@ impl Solver for AnnealingSolver {
                     let energy = dislikes as f64
                         + 100.0 * (total_vertex_distance + delta_distance)
                         + 100.0 * (total_vertex_violation + 2.0 * delta_violation);
-                    if accept_energy(cur_energy, energy, temperature) {
+                    if accept_energy(cur_energy, energy, temperature, &mut rng) {
                         // Move if works.
                         // Compare it with best score.
                         if energy < min_energy {
@@ -102,8 +104,8 @@ impl Solver for AnnealingSolver {
     }
 }
 
-fn accept_energy(prev_energy: f64, new_energy: f64, temperature: f64) -> bool {
-    return ((prev_energy - new_energy) / temperature).exp() > thread_rng().gen();
+fn accept_energy(prev_energy: f64, new_energy: f64, temperature: f64, rng: &mut StdRng) -> bool {
+    return ((prev_energy - new_energy) / temperature).exp() > rng.gen();
 }
 
 fn edges_violation_after_move(
