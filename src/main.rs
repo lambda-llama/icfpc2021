@@ -104,20 +104,29 @@ impl Solver {
 }
 
 fn main() -> Result<()> {
-    let matches = App::new("icfpc2021")
-        .arg("<INPUT> path/to/N.problem")
-        .subcommand(App::new("run"))
+    let app = App::new("icfpc2021")
+        .subcommand(App::new("run").arg("<INPUT> path/to/N.problem"))
         .subcommand(App::new("render"))
-        .get_matches();
+        .subcommand(
+            App::new("download")
+                .arg("<ID> problem N")
+                .arg("<PATH> path/to/N.problem"),
+        )
+        .subcommand(
+            App::new("upload")
+                .arg("<ID> problem N")
+                .arg("<PATH> path/to/N.solution"),
+        );
 
-    match matches.subcommand_name() {
-        Some("run") => {
+    let matches = app.get_matches();
+    match matches.subcommand() {
+        Some(("run", matches)) => {
             let problem = matches.value_of("INPUT").unwrap();
             let data = std::fs::read(&problem)?;
             let problem = Problem::from_json(&data);
             println!("{:?}", problem);
         }
-        Some("render") => {
+        Some(("render", _matches)) => {
             let mut solver = Solver::new(true);
             loop {
                 solver.run_solve_step();
@@ -127,6 +136,19 @@ fn main() -> Result<()> {
                 }
                 thread::sleep(time::Duration::from_millis(50));
             }
+        }
+        Some(("download", matches)) => {
+            portal::Session::download_problem(
+                matches.value_of("ID").unwrap().parse()?,
+                matches.value_of("PATH").unwrap(),
+            )?;
+        }
+        Some(("upload", matches)) => {
+            let session = portal::Session::new()?;
+            session.upload_solution(
+                matches.value_of("ID").unwrap().parse()?,
+                matches.value_of("PATH").unwrap(),
+            )?;
         }
         _ => (),
     }
