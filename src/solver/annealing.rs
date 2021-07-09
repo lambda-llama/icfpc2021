@@ -3,8 +3,9 @@ use rand;
 
 use super::Solver;
 
-const ANNEALING_ITERATIONS: usize = 100000;
-const MAX_STEP: f64 = 100.0;
+const OUTER_IT: usize = 10;
+const INNER_IT: usize = 100000;
+const MAX_STEP: i64 = 10;
 
 const DX: [i64; 4] = [0, 1, 0, -1];
 const DY: [i64; 4] = [1, 0, -1, 0];
@@ -13,29 +14,50 @@ pub struct AnnealingSolver {}
 
 impl Solver for AnnealingSolver {
     fn solve(&self, problem: &Problem) -> Pose {
+        let mut min_energy: u64 = 10000000;
         let mut pose = Pose {
             vertices: problem.figure.vertices.clone(),
         };
-        for it in 0..ANNEALING_ITERATIONS {
-            let vertex_index: usize = rand::random::<usize>() % pose.vertices.len();
-            let direction: usize = rand::random::<usize>() % 4;
-            let step: i64 = (MAX_STEP
-                * ((ANNEALING_ITERATIONS - it) as f64 / ANNEALING_ITERATIONS as f64))
-                .ceil() as i64;
+        for outer_it in 0..OUTER_IT {
+            // let step: i64 = (MAX_STEP
+            //     * ((OUTER_IT - outer_it) as f64 / OUTER_IT as f64))
+            //     .ceil() as i64;
+            let step_size = (OUTER_IT - outer_it) as i64;
+            let mut violated_edges = 0;
+            for _ in 0..INNER_IT {
+                let vertex_index: usize = rand::random::<usize>() % pose.vertices.len();
+                let direction: usize = rand::random::<usize>() % 4;
 
-            let prev_pos = pose.vertices[vertex_index];
-            println!("prev_pos = {:?}, step = {}", prev_pos, step);
-            let new_pos = Point::new(
-                prev_pos.x() + step * DX[direction],
-                prev_pos.y() + step * DY[direction],
-            );
+                let prev_pos = pose.vertices[vertex_index];
+                let new_pos = Point::new(
+                    prev_pos.x() + step_size * DX[direction],
+                    prev_pos.y() + step_size * DY[direction],
+                );
 
-            if edges_valid_after_move(vertex_index, new_pos, &pose, &problem.figure) {
-                // Compute score here.
-                // Compare it with best score.
-                // Move if works.
-                pose.vertices[vertex_index] = new_pos;
+                if edges_valid_after_move(vertex_index, new_pos, &pose, &problem.figure) {
+                    pose.vertices[vertex_index] = new_pos;
+                    let dislikes = problem.dislikes(&pose);
+                    let mut energy = dislikes;
+                    if !problem.validate(&pose) {
+                        energy += 100000;
+                    }
+                    if energy < min_energy {
+                        // Move if works.
+                        // Compute score here.
+                        // Compare it with best score.
+                        min_energy = energy;
+                        println!("Found better pose: {}", energy);
+                    } else {
+                        pose.vertices[vertex_index] = prev_pos;
+                    }
+                } else {
+                    violated_edges += 1;
+                }
             }
+            println!(
+                "step_size: {}, skipped: {}/{}, energy: {}",
+                step_size, violated_edges, INNER_IT, min_energy
+            );
         }
         return pose;
     }
