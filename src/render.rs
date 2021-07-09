@@ -13,6 +13,7 @@ struct Translator {
     x_offset: f32,
     y_offset: f32,
     zero: Point,
+    max: Point,
     x_step: f32,
     y_step: f32,
 }
@@ -26,6 +27,7 @@ impl Translator {
             x_offset,
             y_offset,
             zero: min_p,
+            max: max_p,
             x_step,
             y_step,
         };
@@ -39,7 +41,7 @@ impl Translator {
     }
 
     fn untranslate(&self, v: &Vector2) -> Point {
-        return Point{
+        return Point {
             x: ((v.x - self.x_offset) / self.x_step + (self.zero.x as f32)).round() as i64,
             y: ((v.y - self.y_offset) / self.y_step + (self.zero.y as f32)).round() as i64,
         };
@@ -47,8 +49,11 @@ impl Translator {
 }
 
 fn bounding_box(p: &Problem) -> (Point, Point) {
-    let mut min_p = Point{x: i64::MAX, y: i64::MAX};
-    let mut max_p = Point{x: 0, y: 0};
+    let mut min_p = Point {
+        x: i64::MAX,
+        y: i64::MAX,
+    };
+    let mut max_p = Point { x: 0, y: 0 };
     let it = p.hole.iter().chain(p.hole.iter());
     for p in it {
         min_p.x = std::cmp::min(min_p.x, p.x);
@@ -74,10 +79,17 @@ fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, p
     const POINT_RADIUS: f32 = 5.0;
     const LINE_THICKNESS_HOLE: f32 = 4.0;
     const LINE_THICKNESS_EDGE: f32 = 2.5;
+    const COLOR_GRID: Color = Color::GRAY;
     const COLOR_HOLE: Color = Color::BLACK;
     const COLOR_VERTEX: Color = Color::DARKGREEN;
     const COLOR_EDGE_OK: Color = Color::GREEN;
     const COLOR_EDGE_BAD: Color = Color::RED;
+
+    for x in t.zero.x..t.max.x {
+        for y in t.zero.y..t.max.y {
+            d.draw_pixel_v(t.translate(&Point { x, y }), COLOR_GRID);
+        }
+    }
 
     let mut last_p: Option<&Point> = problem.hole.last();
     for p in problem.hole.iter() {
@@ -155,12 +167,15 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
 
     while !rh.window_should_close() {
         {
-            rh.set_window_title(&thread,&format!(
-                "eps: {}; dlike_score: {}; inside: {}",
-                problem.figure.epsilon,
-                problem.dislikes(&pose.borrow()),
-                problem.validate(&pose.borrow()),
-            ));
+            rh.set_window_title(
+                &thread,
+                &format!(
+                    "eps: {}; dlike_score: {}; inside: {}",
+                    problem.figure.epsilon,
+                    problem.dislikes(&pose.borrow()),
+                    problem.validate(&pose.borrow()),
+                ),
+            );
             let mut d = rh.begin_drawing(&thread);
             d.clear_background(Color::WHITE);
             render_problem(&mut d, &t, &problem, &pose.borrow());
