@@ -18,7 +18,6 @@ use crate::transform::Transform;
 enum Tool {
     Move,
     Fold,
-    Rotate,
 }
 
 struct GuiState {
@@ -100,7 +99,7 @@ impl GuiState {
         self.tool = tool;
         self.dragged_point = None;
         self.selection_pos = None;
-        if tool != Tool::Move && tool != Tool::Rotate {
+        if tool != Tool::Move {
             self.selected_points.clear();
         }
         self.fold_points.clear();
@@ -469,21 +468,26 @@ pub fn interact<'a>(
             let v_idx = hit_test_point(&pose.borrow(), mouse_p, 2);
             match state.tool {
                 Tool::Move => {
-                    state.dragged_point = v_idx;
-                    if let Some(idx) = v_idx {
-                        if !rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT)
-                            && !rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
-                            && !state.selected_points.contains(&idx)
-                        {
-                            state.selected_points.clear();
-                        }
-                        if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) {
-                            state.selected_points.remove(&idx);
-                        } else {
-                            state.selected_points.insert(idx);
-                        }
+                    if rh.is_key_down(KeyboardKey::KEY_R) {
+                        state.rotate_pivot = Some(mouse_p);
+                        state.rotate_vertices_copy = pose.borrow().vertices.clone();
                     } else {
-                        state.selection_pos = Some(mouse_pos);
+                        state.dragged_point = v_idx;
+                        if let Some(idx) = v_idx {
+                            if !rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT)
+                                && !rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
+                                && !state.selected_points.contains(&idx)
+                            {
+                                state.selected_points.clear();
+                            }
+                            if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) {
+                                state.selected_points.remove(&idx);
+                            } else {
+                                state.selected_points.insert(idx);
+                            }
+                        } else {
+                            state.selection_pos = Some(mouse_pos);
+                        }
                     }
                 }
                 Tool::Fold => {
@@ -503,10 +507,6 @@ pub fn interact<'a>(
                             }
                         }
                     }
-                }
-                Tool::Rotate => {
-                    state.rotate_pivot = Some(mouse_p);
-                    state.rotate_vertices_copy = pose.borrow().vertices.clone();
                 }
             }
         }
@@ -606,10 +606,9 @@ pub fn interact<'a>(
                             .center(&problem.figure, idx, problem.bounding_box());
                     }
                 }
-                KeyboardKey::KEY_R => state.switch_tool(Tool::Rotate),
                 KeyboardKey::KEY_A
                     if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
-                        && (state.tool == Tool::Move || state.tool == Tool::Rotate) =>
+                        && state.tool == Tool::Move =>
                 {
                     for idx in 0..problem.figure.vertices.len() {
                         state.selected_points.insert(idx);
