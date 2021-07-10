@@ -603,7 +603,8 @@ pub fn interact<'a>(
                     info!("Saved to {}", PATH);
                 }
                 KeyboardKey::KEY_D => {
-                    if gen.resume().is_some() {
+                    if let Some(temp) = gen.resume() {
+                        pose = temp;
                         need_to_sleep = false;
                     } else {
                         warn!("No more steps in the solver");
@@ -624,7 +625,8 @@ pub fn interact<'a>(
         }
 
         if rh.is_key_down(KeyboardKey::KEY_F) {
-            if gen.resume().is_some() {
+            if let Some(temp) = gen.resume() {
+                pose = temp;
                 need_to_sleep = false;
             } else {
                 warn!("No more steps in the solver");
