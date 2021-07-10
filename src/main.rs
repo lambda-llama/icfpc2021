@@ -178,8 +178,10 @@ fn main() -> Result<()> {
                 let solution_path = solutions_path.join(format!("{}.solution", i));
                 let solution_data = std::fs::read(&solution_path)?;
                 let pose = Pose::from_json(&solution_data)?;
-                assert!(problem.validate(&pose), "Pose should fit into the hole");
-
+                if !problem.validate(&pose) {
+                    warn!("For problem {} solution does not fit into the hole", i);
+                    continue;
+                }
                 // portal::SESSION.upload_solution(i as u64, solution_path.to_str().unwrap())?;
             }
 
