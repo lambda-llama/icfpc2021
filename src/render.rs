@@ -75,7 +75,7 @@ fn render_gui(
             "eps: {}; dlike_score: {}; inside: {}",
             problem.figure.epsilon,
             problem.dislikes(pose),
-            problem.validate(pose),
+            problem.contains(pose),
         ),
     );
 

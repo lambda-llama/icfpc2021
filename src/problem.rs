@@ -199,7 +199,7 @@ impl Problem {
         sum.trunc() as u64
     }
 
-    pub fn validate(&self, pose: &Pose) -> bool {
+    pub fn contains(&self, pose: &Pose) -> bool {
         // 1 - vertices are inside
         for &p in &pose.vertices {
             let relation = self.poly.relate(&p.convert());
@@ -225,13 +225,20 @@ impl Problem {
                 return false;
             }
         }
-        // 3 - edges are of correct length
+        true
+    }
+
+    pub fn correct_length(&self, pose: &Pose) -> bool {
         for idx in 0..self.figure.edges.len() {
             if self.figure.test_edge_len2(idx, pose) != EdgeTestResult::Ok {
                 return false;
             }
         }
         true
+    }
+
+    pub fn validate(&self, pose: &Pose) -> bool {
+        self.contains(&pose) && self.correct_length(&pose)
     }
 
     pub fn min_distance_to(&self, point: Point) -> f64 {
