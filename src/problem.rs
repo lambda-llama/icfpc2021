@@ -4,6 +4,7 @@ use geo::algorithm::line_intersection::{line_intersection, LineIntersection};
 use geo::relate::Relate;
 use ordered_float::NotNan;
 use serde_derive::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 use crate::common::*;
 
@@ -29,6 +30,39 @@ pub enum EdgeTestResult {
     Ok,
     TooShort,
     TooLong,
+}
+
+fn bounding_box(vertices: &Vec<Point>) -> (Point, Point) {
+    let mut min_p = Point {
+        x: i64::MAX,
+        y: i64::MAX,
+    };
+    let mut max_p = Point { x: 0, y: 0 };
+    for p in vertices {
+        min_p.x = std::cmp::min(min_p.x, p.x);
+        max_p.x = std::cmp::max(max_p.x, p.x);
+        min_p.y = std::cmp::min(min_p.y, p.y);
+        max_p.y = std::cmp::max(max_p.y, p.y);
+    }
+    return (min_p, max_p);
+}
+
+fn is_point_belongs_to_poly(poly: &geo::Polygon<f64>, p: Point) -> bool {
+    let relation = poly.relate(&p.convert());
+    relation.is_within() || relation.is_intersects()
+}
+
+fn is_segment_belongs_to_poly(poly: &geo::Polygon<f64>, (a, b): (Point, Point)) -> bool {
+    let s = geo::LineString::from(vec![a.convert(), b.convert()]);
+    let polygon_points = poly.exterior().clone().into_points();
+    let mut boundary_countains = false;
+    for i in 0..polygon_points.len() - 1 {
+        let t = geo::LineString::from(vec![polygon_points[i], polygon_points[i + 1]]);
+        if t.contains(&s) {
+            boundary_countains = true;
+        }
+    }
+    boundary_countains || poly.contains(&s)
 }
 
 impl Figure {
@@ -123,6 +157,8 @@ pub struct BonusUnlock {
 pub struct Problem {
     pub hole: Vec<Point>,
     pub poly: geo::Polygon<f64>,
+    inside_points: HashSet<Point>,
+    inside_segments: HashSet<(Point, Point)>,
     pub figure: Figure,
     pub bonuses: Vec<BonusUnlock>,
 }
@@ -138,10 +174,31 @@ impl Problem {
             })
             .collect();
         border.push(border[0]);
+        let poly = geo::Polygon::new(geo::LineString::from(border), vec![]);
+
+        let (mn, mx) = bounding_box(&hole);
+        let mut inside_points = HashSet::new();
+        let mut inside_segments = HashSet::new();
+        for x in mn.x..mx.x+1 {
+            for y in mn.y..mx.y+1 {
+                let p = Point{x, y};
+                if is_point_belongs_to_poly(&poly, p) {
+                    // TODO: Currently it slows down startup of the render mode. We need to do it in a lazy way.
+                    // for &q in &inside_points {
+                    //     if is_segment_belongs_to_poly(&poly, (p, q)) {
+                    //         inside_segments.insert((p, q));
+                    //     }
+                    // }
+                    inside_points.insert(p);
+                }
+            }
+        }
 
         Self {
             hole: hole,
-            poly: geo::Polygon::new(geo::LineString::from(border), vec![]),
+            poly: poly,
+            inside_points: inside_points,
+            inside_segments: inside_segments,
             figure: figure,
             bonuses,
         }
@@ -207,30 +264,27 @@ impl Problem {
     pub fn contains(&self, pose: &Pose) -> bool {
         // 1 - vertices are inside
         for &p in &pose.vertices {
-            let relation = self.poly.relate(&p.convert());
-            if !(relation.is_within() || relation.is_intersects()) {
-                return false;
+            if !is_point_belongs_to_poly(&self.poly, p) {
+                return false
             }
         }
         // 2 - edges are inside
         for e in &self.figure.edges {
-            let s = geo::LineString::from(vec![
-                pose.vertices[e.v0].convert(),
-                pose.vertices[e.v1].convert(),
-            ]);
-            let polygon_points = self.poly.exterior().clone().into_points();
-            let mut boundary_countains = false;
-            for i in 0..polygon_points.len() - 1 {
-                let t = geo::LineString::from(vec![polygon_points[i], polygon_points[i + 1]]);
-                if t.contains(&s) {
-                    boundary_countains = true;
-                }
-            }
-            if !(self.poly.contains(&s) || boundary_countains) {
-                return false;
+            if !is_segment_belongs_to_poly(
+                &self.poly,
+                (pose.vertices[e.v0], pose.vertices[e.v1])) {
+                return false
             }
         }
         true
+    }
+
+    pub fn contains_point(&self, p: &Point) -> bool {
+        self.inside_points.contains(p)
+    }
+
+    pub fn contains_segment(&self, (a, b): (Point, Point)) -> bool {
+        self.inside_segments.contains(&(a, b)) || self.inside_segments.contains(&(b, a))
     }
 
     pub fn correct_length(&self, pose: &Pose) -> bool {
@@ -300,19 +354,7 @@ impl Problem {
     }
 
     pub fn bounding_box(&self) -> (Point, Point) {
-        let mut min_p = Point {
-            x: i64::MAX,
-            y: i64::MAX,
-        };
-        let mut max_p = Point { x: 0, y: 0 };
-        let it = self.hole.iter().chain(self.hole.iter());
-        for p in it {
-            min_p.x = std::cmp::min(min_p.x, p.x);
-            max_p.x = std::cmp::max(max_p.x, p.x);
-            min_p.y = std::cmp::min(min_p.y, p.y);
-            max_p.y = std::cmp::max(max_p.y, p.y);
-        }
-        return (min_p, max_p);
+        bounding_box(&self.hole)
     }
 }
 
