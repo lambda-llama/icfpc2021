@@ -43,7 +43,7 @@ impl Transform for Pose {
                 continue;
             }
             let b = Figure::to_float_point(*p) - p1;
-            let q = p1 + a * a.dot(b) / (a.dot(a)) - b;
+            let q = p1 + a * a.dot(b) / (a.dot(a)) * 2f64 - b;
             p.x = q.x().round() as i64;
             p.y = q.y().round() as i64;
         }
