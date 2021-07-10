@@ -20,6 +20,7 @@ pub trait Solver: Sync {
             problem,
             Rc::new(RefCell::new(Pose {
                 vertices: problem.figure.vertices.clone(),
+                bonuses: vec![],
             })),
         )
         .last()

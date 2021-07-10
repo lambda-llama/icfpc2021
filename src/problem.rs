@@ -74,15 +74,48 @@ impl Figure {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum BonusType {
+    Globalist, // Shared epsilon
+    BreakALeg, // Divide an edge into two
+}
+
+impl From<&str> for BonusType {
+    fn from(b: &str) -> Self {
+        match b {
+            "GLOBALIST" => BonusType::Globalist,
+            "BREAK_A_LEG" => BonusType::BreakALeg,
+            t => panic!("Failed to parse bonus type '{}'", t),
+        }
+    }
+}
+
+impl From<BonusType> for String {
+    fn from(b: BonusType) -> Self {
+        match b {
+            BonusType::Globalist => "GLOBALIST".to_owned(),
+            BonusType::BreakALeg => "BREAK_A_LEG".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct BonusUnlock {
+    position: Point,
+    bonus: BonusType,
+    problem: u32,
+}
+
 #[derive(Debug)]
 pub struct Problem {
     pub hole: Vec<Point>,
     pub poly: geo::Polygon<f64>,
     pub figure: Figure,
+    pub bonuses: Vec<BonusUnlock>,
 }
 
 impl Problem {
-    pub fn new(hole: Vec<Point>, figure: Figure) -> Self {
+    pub fn new(hole: Vec<Point>, figure: Figure, bonuses: Vec<BonusUnlock>) -> Self {
         let mut border: Vec<geo::Coordinate<f64>> = hole
             .clone()
             .into_iter()
@@ -97,6 +130,7 @@ impl Problem {
             hole: hole,
             poly: geo::Polygon::new(geo::LineString::from(border), vec![]),
             figure: figure,
+            bonuses,
         }
     }
 
@@ -105,6 +139,7 @@ impl Problem {
             hole,
             figure: RawFigure { vertices, edges },
             epsilon,
+            bonuses,
         } = serde_json::from_slice(data)?;
         let vertices = vertices
             .into_iter()
@@ -118,11 +153,25 @@ impl Problem {
                 len2: Figure::distance_squared(vertices[e[0] as usize], vertices[e[1] as usize]),
             })
             .collect();
+        let bonuses = bonuses
+            .into_iter()
+            .map(|b| -> BonusUnlock {
+                BonusUnlock {
+                    position: Point {
+                        x: b.position[0],
+                        y: b.position[1],
+                    },
+                    bonus: b.bonus[..].into(),
+                    problem: b.problem,
+                }
+            })
+            .collect();
         Ok(Problem::new(
             hole.into_iter()
                 .map(|p| Point { x: p[0], y: p[1] })
                 .collect(),
             Figure::new(vertices, edges, epsilon as f64 / 1_000_000.0f64),
+            bonuses,
         ))
     }
 
@@ -141,7 +190,6 @@ impl Problem {
             .sum();
         sum.trunc() as u64
     }
-
 
     pub fn validate(&self, pose: &Pose) -> bool {
         // 1 - vertices are inside
@@ -205,18 +253,32 @@ impl Problem {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct BonusUse {
+    bonus: BonusType,
+    problem: u32,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Pose {
     pub vertices: Vec<Point>,
+    pub bonuses: Vec<BonusUse>,
 }
 
 impl Pose {
     pub fn from_json(data: &[u8]) -> Result<Self> {
-        let RawPose { vertices } = serde_json::from_slice(data)?;
+        let RawPose { vertices, bonuses } = serde_json::from_slice(data)?;
         Ok(Pose {
             vertices: vertices
                 .into_iter()
                 .map(|p| Point { x: p[0], y: p[1] })
+                .collect(),
+            bonuses: bonuses
+                .into_iter()
+                .map(|b| BonusUse {
+                    bonus: b.bonus[..].into(),
+                    problem: b.problem,
+                })
                 .collect(),
         })
     }
@@ -224,6 +286,14 @@ impl Pose {
     pub fn to_json(&self) -> Result<String> {
         let pose = RawPose {
             vertices: self.vertices.iter().map(|p| vec![p.x, p.y]).collect(),
+            bonuses: self
+                .bonuses
+                .iter()
+                .map(|b| RawBonusUse {
+                    bonus: b.bonus.into(),
+                    problem: b.problem,
+                })
+                .collect(),
         };
         Ok(serde_json::to_string(&pose)?)
     }
@@ -242,9 +312,24 @@ struct RawProblem {
     pub hole: Vec<Vec<i64>>,
     pub figure: RawFigure,
     pub epsilon: u64,
+    pub bonuses: Vec<RawBonusUnlock>,
 }
 
 #[derive(Deserialize, Serialize)]
 struct RawPose {
     pub vertices: Vec<Vec<i64>>,
+    pub bonuses: Vec<RawBonusUse>,
+}
+
+#[derive(Deserialize)]
+struct RawBonusUnlock {
+    pub position: Vec<i64>,
+    pub bonus: String,
+    pub problem: u32,
+}
+
+#[derive(Deserialize, Serialize)]
+struct RawBonusUse {
+    pub bonus: String,
+    pub problem: u32,
 }

@@ -98,8 +98,13 @@ fn main() -> Result<()> {
             let valid = problem.validate(&pose);
             let time_taken = std::time::Instant::now() - start;
             let json = pose.to_json()?;
-            println!("dislikes = {}, valid = {}, took {}.{}s", dislikes, valid,
-                time_taken.as_secs(), time_taken.subsec_millis());
+            println!(
+                "dislikes = {}, valid = {}, took {}.{}s",
+                dislikes,
+                valid,
+                time_taken.as_secs(),
+                time_taken.subsec_millis()
+            );
             std::fs::write(matches.value_of("OUTPUT").unwrap(), json)?;
         }
         Some(("solve", matches)) => {
@@ -125,6 +130,7 @@ fn main() -> Result<()> {
                 }
                 None => Pose {
                     vertices: problem.figure.vertices.clone(),
+                    bonuses: vec![],
                 },
             };
             let solver = match matches.value_of("SOLVER") {
