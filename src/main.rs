@@ -196,12 +196,18 @@ fn main() -> Result<()> {
                     let solution_state = SolutionState::from_json(&solution_state_data)?;
 
                     if solution_state.dislikes == dislikes {
-                        info!("For problem {} solution with same score {} was already submitted", i, dislikes);
+                        info!(
+                            "For problem {} solution with same score {} was already submitted",
+                            i, dislikes
+                        );
                         continue;
                     }
                 }
 
-                warn!("Uploading solution for problem {}, dislikes: {}", i, dislikes);
+                warn!(
+                    "Uploading solution for problem {}, dislikes: {}",
+                    i, dislikes
+                );
                 portal::SESSION.upload_solution(i as u64, solution_path.to_str().unwrap())?;
                 let solution_state_data = SolutionState { dislikes };
                 std::fs::write(solution_state_path, solution_state_data.to_json()?)?;

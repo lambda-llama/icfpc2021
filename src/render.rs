@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::ffi::CString;
 use std::rc::Rc;
 use std::{thread, time};
@@ -20,6 +21,8 @@ enum Tool {
 struct GuiState {
     pub tool: Tool,
     pub dragged_point: Option<usize>,
+    pub selection_pos: Option<Vector2>,
+    pub selected_points: HashSet<usize>,
 }
 
 struct Translator {
@@ -92,18 +95,28 @@ fn render_gui(
     );
 
     // Help bar
-    let mut text =
-        b"Tools: Q - Move, W - Center\nMisc: S - Save, D - Step solver, F - Run solver".to_owned();
+    let mut text = b"\
+Tools: Q - Move, W - Center\n\
+Selection: Ctrl+A - Select all, Shift adds, Ctrl removes
+Misc: S - Save, D - Step solver, F - Run solver\n\
+"
+    .to_owned();
     d.gui_text_box_multi(
         Rectangle {
             x: 0.0,
-            y: d.get_screen_height() as f32 - 34.0,
+            y: d.get_screen_height() as f32 - 51.0,
             width: d.get_screen_width() as f32,
-            height: 34.0,
+            height: 51.0,
         },
         &mut text,
         false,
     );
+
+    // Selection window
+    if let Some(pos) = state.selection_pos {
+        let rect = vec2_to_rect(pos, d.get_mouse_position());
+        d.draw_rectangle_lines_ex(rect, 1, Color::DARKGRAY);
+    }
 }
 
 fn render_problem(
@@ -125,6 +138,7 @@ fn render_problem(
     const COLOR_HOLE: Color = Color::BLACK;
     const COLOR_BONUS_UNLOCK: Color = Color::GOLD;
     const COLOR_VERTEX: Color = Color::DARKGREEN;
+    const COLOR_VERTEX_SELECTED: Color = Color::GREEN;
     const COLOR_EDGE_OK: Color = Color::GREEN;
     const COLOR_EDGE_TOO_SHORT: Color = Color::BLUE;
     const COLOR_EDGE_TOO_LONG: Color = Color::RED;
@@ -209,12 +223,17 @@ fn render_problem(
     }
 
     // Vertices
-    for p in pose.vertices.iter() {
-        d.draw_circle_v(t.translate(p), POINT_RADIUS, COLOR_VERTEX);
+    for (idx, p) in pose.vertices.iter().enumerate() {
+        let color = if state.selected_points.contains(&idx) {
+            COLOR_VERTEX_SELECTED
+        } else {
+            COLOR_VERTEX
+        };
+        d.draw_circle_v(t.translate(p), POINT_RADIUS, color);
     }
 }
 
-fn hit_test(pose: &Pose, mouse_pos: Point, dist: i64) -> Option<usize> {
+fn hit_test_point(pose: &Pose, mouse_pos: Point, dist: i64) -> Option<usize> {
     let mut points_with_dist = pose
         .vertices
         .iter()
@@ -230,6 +249,15 @@ fn hit_test(pose: &Pose, mouse_pos: Point, dist: i64) -> Option<usize> {
     } else {
         None
     }
+}
+
+fn hit_test_rect(pose: &Pose, min: Point, max: Point) -> Vec<usize> {
+    pose.vertices
+        .iter()
+        .enumerate()
+        .filter(|&(_i, &p)| p.x >= min.x && p.x <= max.x && p.y >= min.y && p.y <= max.y)
+        .map(|(i, _p)| i)
+        .collect()
 }
 
 pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> Result<()> {
@@ -259,22 +287,41 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
     let mut state = GuiState {
         tool: Tool::Move,
         dragged_point: None,
+        selection_pos: None,
+        selected_points: HashSet::new(),
     };
 
     while !rh.window_should_close() {
         {
             let mut d = rh.begin_drawing(&thread);
             d.clear_background(Color::WHITE);
-            render_gui(&mut d, &thread, &state, &problem, &pose.borrow());
             render_problem(&mut d, &state, &t, &problem, &pose.borrow());
+            render_gui(&mut d, &thread, &state, &problem, &pose.borrow());
         }
 
+        let mouse_pos = rh.get_mouse_position();
+
         if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
-            let mouse_pos = t.untranslate(&rh.get_mouse_position());
-            let v_idx = hit_test(&pose.borrow(), mouse_pos, 2);
+            let mouse_p = t.untranslate(&mouse_pos);
+            let v_idx = hit_test_point(&pose.borrow(), mouse_p, 2);
             match state.tool {
                 Tool::Move => {
                     state.dragged_point = v_idx;
+                    if let Some(idx) = v_idx {
+                        if !rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT)
+                            && !rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
+                            && !state.selected_points.contains(&idx)
+                        {
+                            state.selected_points.clear();
+                        }
+                        if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) {
+                            state.selected_points.remove(&idx);
+                        } else {
+                            state.selected_points.insert(idx);
+                        }
+                    } else {
+                        state.selection_pos = Some(mouse_pos);
+                    }
                 }
                 Tool::Center => {
                     if let Some(idx) = v_idx {
@@ -286,12 +333,43 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
 
         if rh.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON) {
             state.dragged_point = None;
+            if let Some(pos) = state.selection_pos {
+                let rect = vec2_to_rect(pos, mouse_pos);
+                let min = t.untranslate(&Vector2 {
+                    x: rect.x,
+                    y: rect.y,
+                });
+                let max = t.untranslate(&Vector2 {
+                    x: rect.x + rect.width,
+                    y: rect.y + rect.height,
+                });
+                let hits = hit_test_rect(&pose.borrow(), min, max);
+                if !rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT)
+                    && !rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
+                {
+                    state.selected_points.clear();
+                }
+                if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) {
+                    for hit in hits {
+                        state.selected_points.remove(&hit);
+                    }
+                } else {
+                    for hit in hits {
+                        state.selected_points.insert(hit);
+                    }
+                }
+                state.selection_pos = None;
+            }
         }
 
         if rh.get_gesture_detected() == GestureType::GESTURE_DRAG {
-            let mouse_pos = t.untranslate(&rh.get_mouse_position());
+            let mouse_p = t.untranslate(&mouse_pos);
             if let Some(idx) = state.dragged_point {
-                pose.borrow_mut().vertices[idx] = mouse_pos;
+                let diff_p = mouse_p - pose.borrow().vertices[idx];
+                let vertices = &mut pose.borrow_mut().vertices;
+                for &idx in state.selected_points.iter() {
+                    vertices[idx] = vertices[idx] + diff_p;
+                }
             }
         }
 
@@ -300,6 +378,11 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
             match key {
                 KeyboardKey::KEY_Q => state.tool = Tool::Move,
                 KeyboardKey::KEY_W => state.tool = Tool::Center,
+                KeyboardKey::KEY_A if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) => {
+                    for idx in 0..problem.figure.vertices.len() {
+                        state.selected_points.insert(idx);
+                    }
+                }
                 KeyboardKey::KEY_S => {
                     const PATH: &'static str = "./current.solution";
                     std::fs::write(PATH, pose.borrow().to_json()?)?;
@@ -329,4 +412,24 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
         }
     }
     Ok(())
+}
+
+fn vec2_to_rect(v1: Vector2, v2: Vector2) -> Rectangle {
+    let mut min_x = v1.x;
+    let mut max_x = v1.x;
+    let mut min_y = v1.y;
+    let mut max_y = v1.y;
+    if v2.x < min_x {
+        min_x = v2.x;
+    }
+    if v2.x > max_x {
+        max_x = v2.x;
+    }
+    if v2.y < min_y {
+        min_y = v2.y;
+    }
+    if v2.y > max_y {
+        max_y = v2.y;
+    }
+    Rectangle::new(min_x, min_y, max_x - min_x, max_y - min_y)
 }

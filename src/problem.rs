@@ -328,9 +328,7 @@ pub struct SolutionState {
 impl SolutionState {
     pub fn from_json(data: &[u8]) -> Result<Self> {
         let RawSolutionState { dislikes } = serde_json::from_slice(data)?;
-        Ok(SolutionState {
-            dislikes
-        })
+        Ok(SolutionState { dislikes })
     }
 
     pub fn to_json(&self) -> Result<String> {
@@ -381,4 +379,3 @@ struct RawBonusUse {
 struct RawSolutionState {
     pub dislikes: u64,
 }
-
