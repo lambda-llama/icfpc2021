@@ -1,6 +1,6 @@
+use geo::algorithm::closest_point::ClosestPoint;
 use std::fmt::{self, Display, Formatter};
 use std::{cell::RefCell, rc::Rc};
-use geo::algorithm::closest_point::ClosestPoint;
 
 use crate::common::*;
 use crate::problem::{Figure, Point, Pose, Problem};
@@ -49,6 +49,7 @@ impl Display for ViolationSummary {
 pub struct ViolationState {
     summary: ViolationSummary,
     vertex_violations: Vec<f64>,
+    #[allow(dead_code)]
     deform_violations: Vec<f64>,
     intersect_violations: Vec<f64>,
 }
@@ -119,11 +120,16 @@ impl Solver for AnnealingSolver {
                                 y: dst_pos.y + (dst_pos.y - cur_pos.y),
                             }
                         } else {
-                            let first_dst_vertex_index = problem.figure.vertex_edges[vertex_index][0].1;
-                            let second_dst_vertex_index = problem.figure.vertex_edges[vertex_index][1].1;
-                            let first_dst_pos = pose.borrow().vertices[first_dst_vertex_index].convert();
-                            let second_dst_pos = pose.borrow().vertices[second_dst_vertex_index].convert();
-                            let closest = geo::Line::new(first_dst_pos, second_dst_pos).closest_point(&cur_pos.convert());
+                            let first_dst_vertex_index =
+                                problem.figure.vertex_edges[vertex_index][0].1;
+                            let second_dst_vertex_index =
+                                problem.figure.vertex_edges[vertex_index][1].1;
+                            let first_dst_pos =
+                                pose.borrow().vertices[first_dst_vertex_index].convert();
+                            let second_dst_pos =
+                                pose.borrow().vertices[second_dst_vertex_index].convert();
+                            let closest = geo::Line::new(first_dst_pos, second_dst_pos)
+                                .closest_point(&cur_pos.convert());
                             if let geo::Closest::SinglePoint(p) = closest {
                                 new_pos = Point {
                                     x: (p.x() + (p.x() - cur_pos.x as f64)).round() as i64,
@@ -257,6 +263,7 @@ fn edge_deform_violation(
     return 0.0;
 }
 
+#[allow(dead_code)]
 fn edges_valid_after_move(
     vertex_index: usize,
     new_position: Point,
