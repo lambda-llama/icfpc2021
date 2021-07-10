@@ -64,6 +64,11 @@ fn main() -> Result<()> {
                 .arg("<ID> problem N")
                 .arg("<PATH> path/to/N.solution"),
         )
+        .subcommand(
+            App::new("upload_all")
+                .arg(Arg::new("PROBLEMS_PATH").default_value("./problems"))
+                .arg(Arg::new("SOLUTIONS_PATH").default_value("./solutions")),
+        )
         .subcommand(App::new("stats").arg("<INPUT> path/to/problems"));
 
     let app_matches = app.get_matches();
@@ -160,6 +165,24 @@ fn main() -> Result<()> {
             assert!(problem.validate(&pose), "Pose should fit into the hole");
 
             portal::SESSION.upload_solution(id.parse()?, solution)?;
+        }
+        Some(("upload_all", matches)) => {
+            let problems_path = std::path::Path::new(matches.value_of("PROBLEMS_PATH").unwrap());
+            let solutions_path = std::path::Path::new(matches.value_of("SOLUTIONS_PATH").unwrap());
+            let count = problems_path.read_dir()?.count();
+
+            for i in 1..count {
+                let problem = Problem::from_json(&std::fs::read(
+                        problems_path.join(format!("{}.problem", i)),
+                        )?)?;
+                let solution_path = solutions_path.join(format!("{}.solution", i));
+                let solution_data = std::fs::read(&solution_path)?;
+                let pose = Pose::from_json(&solution_data)?;
+                assert!(problem.validate(&pose), "Pose should fit into the hole");
+
+                // portal::SESSION.upload_solution(i as u64, solution_path.to_str().unwrap())?;
+            }
+
         }
         Some(("stats", matches)) => {
             let problems_path = std::path::Path::new(matches.value_of("INPUT").unwrap());
