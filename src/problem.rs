@@ -307,6 +307,26 @@ impl Pose {
     }
 }
 
+pub struct SolutionState {
+    pub dislikes: u64,
+}
+
+impl SolutionState {
+    pub fn from_json(data: &[u8]) -> Result<Self> {
+        let RawSolutionState { dislikes } = serde_json::from_slice(data)?;
+        Ok(SolutionState {
+            dislikes
+        })
+    }
+
+    pub fn to_json(&self) -> Result<String> {
+        let solution_state = RawSolutionState {
+            dislikes: self.dislikes,
+        };
+        Ok(serde_json::to_string(&solution_state)?)
+    }
+}
+
 // Serialization helper types below
 
 #[derive(Deserialize)]
@@ -342,3 +362,9 @@ struct RawBonusUse {
     pub bonus: String,
     pub problem: u32,
 }
+
+#[derive(Deserialize, Serialize)]
+struct RawSolutionState {
+    pub dislikes: u64,
+}
+

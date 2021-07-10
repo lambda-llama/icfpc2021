@@ -3,6 +3,7 @@ use clap::Arg;
 use log::LevelFilter;
 use problem::Pose;
 use problem::Problem;
+use problem::SolutionState;
 use render::interact;
 use simplelog::{ColorChoice, Config, TerminalMode};
 
@@ -176,13 +177,34 @@ fn main() -> Result<()> {
                         problems_path.join(format!("{}.problem", i)),
                         )?)?;
                 let solution_path = solutions_path.join(format!("{}.solution", i));
+                if !solution_path.exists() {
+                    info!("No solution for problem {}", i);
+                    continue;
+                }
+
                 let solution_data = std::fs::read(&solution_path)?;
                 let pose = Pose::from_json(&solution_data)?;
                 if !problem.validate(&pose) {
                     warn!("For problem {} solution does not fit into the hole", i);
                     continue;
                 }
-                // portal::SESSION.upload_solution(i as u64, solution_path.to_str().unwrap())?;
+                let dislikes = problem.dislikes(&pose);
+                let solution_state_path = solutions_path.join(format!("{}.state", i));
+
+                if solution_state_path.exists() {
+                    let solution_state_data = std::fs::read(&solution_state_path)?;
+                    let solution_state = SolutionState::from_json(&solution_state_data)?;
+
+                    if solution_state.dislikes == dislikes {
+                        info!("For problem {} solution with same score {} was already submitted", i, dislikes);
+                        continue;
+                    }
+                }
+
+                warn!("Uploading solution for problem {}, dislikes: {}", i, dislikes);
+                portal::SESSION.upload_solution(i as u64, solution_path.to_str().unwrap())?;
+                let solution_state_data = SolutionState { dislikes };
+                std::fs::write(solution_state_path, solution_state_data.to_json()?)?;
             }
 
         }
