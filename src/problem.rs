@@ -85,6 +85,10 @@ impl Figure {
         ((p.x - q.x) as f64).powi(2) + ((p.y - q.y) as f64).powi(2)
     }
 
+    pub fn distance_squared_int(p: Point, q: Point) -> i64 {
+        (p.x - q.x).pow(2) + (p.y - q.y).pow(2)
+    }
+
     pub fn edge_len2(&self, idx: usize, pose: &Pose) -> f64 {
         let e = &self.edges[idx];
         let p = pose.vertices[e.v0];
@@ -97,6 +101,14 @@ impl Figure {
         (
             (1.0f64 - self.epsilon) * len2_default,
             (1.0f64 + self.epsilon) * len2_default,
+        )
+    }
+
+    pub fn edge_len2_bounds_int(&self, idx: usize) -> (i64, i64) {
+        let len2_default = self.edges[idx].len2;
+        (
+            ((1.0f64 - self.epsilon) * len2_default).ceil() as i64,
+            ((1.0f64 + self.epsilon) * len2_default).floor() as i64,
         )
     }
 

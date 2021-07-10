@@ -5,6 +5,7 @@ mod cons;
 mod id;
 mod jammer;
 mod wave;
+mod tree_search;
 
 use crate::problem::{Pose, Problem};
 
@@ -40,6 +41,8 @@ lazy_static! {
         map.insert("annealing".to_owned(), Box::new(annealing::AnnealingSolver::default()));
         // Jam all vertices in and try to fix the edges
         map.insert("jammed_wave".to_owned(), Box::new(Cons::<jammer::JammerSolver, wave::WaveSolver>::default()));
+        // Discrete tree search.
+        map.insert("tree_search".to_owned(), Box::new(tree_search::TreeSearchSolver::default()));
         map
     };
 }
