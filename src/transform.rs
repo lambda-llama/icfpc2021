@@ -1,6 +1,6 @@
 use geomath::prelude::coordinates::Polar;
 
-use crate::problem::*;
+use crate::{common::PointConversion, problem::*};
 
 // A separate trait for `Pose` transformations to have a clearer API
 // for these algorithms
@@ -25,8 +25,15 @@ impl Transform for Pose {
     fn fold(&mut self, _f: &Figure, _v1: usize, _v2: usize, _vcomp: usize) {
         let n = _f.vertices.len();
         let mut components = vec![-1; n];
-        components[_v1] = 0;
-        components[_v2] = 0;
+
+        let p1 = Figure::to_float_point(self.vertices[_v1]);
+        let p2 = Figure::to_float_point(self.vertices[_v2]);
+        let a = p2 - p1;
+        for (u, p) in self.vertices.iter_mut().enumerate() {
+            if p1.cross_prod(p2, p.convert()) == 0.0f64 {
+                components[u] = 0;
+            }
+        }
 
         fn dfs(
             u: usize,
@@ -48,9 +55,7 @@ impl Transform for Pose {
                 cid += 1;
             }
         }
-        let p1 = Figure::to_float_point(self.vertices[_v1]);
-        let p2 = Figure::to_float_point(self.vertices[_v2]);
-        let a = p2 - p1;
+
         for (u, p) in self.vertices.iter_mut().enumerate() {
             if components[u] != components[_vcomp] {
                 continue;

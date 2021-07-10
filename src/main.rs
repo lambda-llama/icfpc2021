@@ -172,7 +172,7 @@ fn main() -> Result<()> {
             let solutions_path = std::path::Path::new(matches.value_of("SOLUTIONS_PATH").unwrap());
             let count = problems_path.read_dir()?.count();
 
-            for i in 1..count {
+            for i in 1..count+1 {
                 let problem = Problem::from_json(&std::fs::read(
                     problems_path.join(format!("{}.problem", i)),
                 )?)?;
