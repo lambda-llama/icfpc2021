@@ -142,6 +142,7 @@ impl Problem {
         sum.trunc() as u64
     }
 
+
     pub fn validate(&self, pose: &Pose) -> bool {
         // 1 - vertices are inside
         for &p in &pose.vertices {

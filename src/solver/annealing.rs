@@ -78,7 +78,7 @@ impl Solver for AnnealingSolver {
 
             // Remember the parameters of the best pose found so far.
             let mut best_violation_summary = cur_violation_state.summary.clone();
-            let mut best_pose = pose.clone();
+            let mut best_pose = Rc::new((*pose).clone());
 
             let mut temperature = START_T;
 
@@ -100,8 +100,9 @@ impl Solver for AnnealingSolver {
                         y: cur_pos.y + step_size * DY[direction],
                     };
 
-                    // Compute score here.
-                    // TODO: Migrate to delta-recompute here.
+                    // Do a change.
+                    pose.borrow_mut().vertices[vertex_index] = new_pos;
+                    // Compute dislikes.
                     let dislikes = problem.dislikes(&pose.borrow());
                     // Vertex violation.
                     let vertex_violation = problem.min_distance_to(new_pos);
@@ -145,20 +146,10 @@ impl Solver for AnnealingSolver {
                             + delta_intersect_violation,
                     };
 
-                    pose.borrow_mut().vertices[vertex_index] = new_pos;
-
                     let cur_energy = cur_violation_state.summary.energy();
                     let new_energy = new_violation_summary.energy();
 
                     if accept_energy(cur_energy, new_energy, temperature, &mut rng) {
-                        // Move if works.
-                        // Compare it with best score.
-                        if new_energy < best_violation_summary.energy() {
-                            best_violation_summary = new_violation_summary.clone();
-                            best_pose = pose.clone();
-                            s.yield_(pose.clone());
-                            info!("Better pose: {}", best_violation_summary);
-                        }
                         cur_violation_state.vertex_violations[vertex_index] = vertex_violation;
                         for (edge_index, intersect_violation) in &new_edge_intersect_violations {
                             cur_violation_state.intersect_violations[*edge_index] =
@@ -166,6 +157,14 @@ impl Solver for AnnealingSolver {
                         }
                         // TODO: Add edge violation recalc.
                         cur_violation_state.summary = new_violation_summary.clone();
+
+                        // Compare it with best score.
+                        if new_energy < best_violation_summary.energy() {
+                            best_violation_summary = new_violation_summary.clone();
+                            best_pose = Rc::new((*pose).clone());
+                            s.yield_(best_pose.clone());
+                            info!("Better pose: {}", best_violation_summary);
+                        }
                     } else {
                         pose.borrow_mut().vertices[vertex_index] = cur_pos;
                     }
@@ -239,9 +238,7 @@ fn edges_valid_after_move(
 
 // Evaluates the current state of the pose.
 fn compute_violation_state(pose: &Pose, problem: &Problem) -> ViolationState {
-    // Dislikes.
-    let cur_dislikes = problem.dislikes(&pose);
-
+    // Dislikes and
     // Vertex violation - how fast all vertices are from the internals of the hole.
     let mut total_vertex_violation = 0.0;
     let mut vertex_violations = vec![0.0; pose.vertices.len()];
@@ -271,7 +268,7 @@ fn compute_violation_state(pose: &Pose, problem: &Problem) -> ViolationState {
 
     return ViolationState {
         summary: ViolationSummary {
-            dislikes: cur_dislikes,
+            dislikes: problem.dislikes(&pose),
             vertex_violation: total_vertex_violation,
             deform_violation: total_deform_violation,
             intersect_violations: total_intersect_violation,

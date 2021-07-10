@@ -89,12 +89,17 @@ fn main() -> Result<()> {
             // TODO: remove these debug prints later
             println!("{:?}", problem);
             let name = matches.value_of("SOLVER").unwrap();
+            let start = std::time::Instant::now();
             let pose = solver::SOLVERS
                 .get(name)
                 .expect(&format!("Failed to find solver '{}'", name))
                 .solve(&problem);
-            println!("{:?}", pose);
+            let dislikes = problem.dislikes(&pose);
+            let valid = problem.validate(&pose);
+            let time_taken = std::time::Instant::now() - start;
             let json = pose.to_json()?;
+            println!("dislikes = {}, valid = {}, took {}.{}s", dislikes, valid,
+                time_taken.as_secs(), time_taken.subsec_millis());
             std::fs::write(matches.value_of("OUTPUT").unwrap(), json)?;
         }
         Some(("solve", matches)) => {
