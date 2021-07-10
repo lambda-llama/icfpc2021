@@ -24,6 +24,7 @@ pub struct ViolationSummary {
     dislikes: u64,
     vertex_violation: f64,
     deform_violation: f64,
+    intersect_violations: f64,
 }
 
 impl Display for ViolationSummary {
@@ -33,10 +34,11 @@ impl Display for ViolationSummary {
         // into a buffer (the first argument)
         write!(
             f,
-            "(d: {}, vertex_v: {:.3}, deform: {:.3}, energy: {:.3})",
+            "(d: {}, vertex_v: {:.3}, deform: {:.3}, intersect: {:.3}, energy: {:.3})",
             self.dislikes,
             self.vertex_violation,
             self.deform_violation,
+            self.intersect_violations,
             self.energy()
         )
     }
@@ -46,11 +48,15 @@ pub struct ViolationState {
     summary: ViolationSummary,
     vertex_violations: Vec<f64>,
     deform_violations: Vec<f64>,
+    intersect_violations: Vec<f64>,
 }
 
 impl ViolationSummary {
     fn energy(&self) -> f64 {
-        self.dislikes as f64 + 100.0 * self.vertex_violation + 100.0 * self.deform_violation
+        self.dislikes as f64
+            + 100.0 * self.vertex_violation
+            + 100.0 * self.deform_violation
+            + 1000.0 * self.intersect_violations
     }
 }
 
@@ -116,12 +122,26 @@ impl Solver for AnnealingSolver {
                     );
                     let delta_deform_violation = new_deform_violation - cur_deform_violation;
 
+                    // Edge intersection violation.
+                    let mut new_edge_intersect_violations = Vec::new();
+                    let mut delta_intersect_violation = 0.0;
+                    for (edge_index, dst) in &problem.figure.vertex_edges[vertex_index] {
+                        let new_edge_intersect_violation =
+                            problem.edge_intersections(new_pos, pose.borrow().vertices[*dst]);
+                        new_edge_intersect_violations
+                            .push((*edge_index, new_edge_intersect_violation));
+                        delta_intersect_violation += new_edge_intersect_violation
+                            - cur_violation_state.intersect_violations[*edge_index];
+                    }
+
                     let new_violation_summary = ViolationSummary {
                         dislikes,
                         vertex_violation: cur_violation_state.summary.vertex_violation
                             + delta_vertex_violation,
                         deform_violation: cur_violation_state.summary.deform_violation
                             + delta_deform_violation,
+                        intersect_violations: cur_violation_state.summary.intersect_violations
+                            + delta_intersect_violation,
                     };
 
                     pose.borrow_mut().vertices[vertex_index] = new_pos;
@@ -139,6 +159,9 @@ impl Solver for AnnealingSolver {
                             println!("Better pose: {}", best_violation_summary);
                         }
                         cur_violation_state.vertex_violations[vertex_index] = vertex_violation;
+                        for (edge_index, intersect_violation) in &new_edge_intersect_violations {
+                            cur_violation_state.intersect_violations[*edge_index] = *intersect_violation;
+                        }
                         // TODO: Add edge violation recalc.
                         cur_violation_state.summary = new_violation_summary.clone();
                     } else {
@@ -228,6 +251,8 @@ fn compute_violation_state(pose: &Pose, problem: &Problem) -> ViolationState {
     // Edge deformation violation - how much are we violating deformation constraints.
     let mut deform_violations = vec![0.0; problem.figure.edges.len()];
     let mut total_deform_violation = 0.0;
+    let mut intersect_violations = vec![0.0; problem.figure.edges.len()];
+    let mut total_intersect_violation = 0.0;
     for (e_index, edge) in problem.figure.edges.iter().enumerate() {
         deform_violations[e_index] = edge_deform_violation(
             e_index,
@@ -235,7 +260,11 @@ fn compute_violation_state(pose: &Pose, problem: &Problem) -> ViolationState {
             pose.vertices[edge.v1],
             &problem.figure,
         );
-        total_deform_violation += deform_violations[e_index]
+        total_deform_violation += deform_violations[e_index];
+
+        intersect_violations[e_index] =
+            problem.edge_intersections(pose.vertices[edge.v0], pose.vertices[edge.v1]);
+        total_intersect_violation += intersect_violations[e_index];
     }
 
     return ViolationState {
@@ -243,8 +272,10 @@ fn compute_violation_state(pose: &Pose, problem: &Problem) -> ViolationState {
             dislikes: cur_dislikes,
             vertex_violation: total_vertex_violation,
             deform_violation: total_deform_violation,
+            intersect_violations: total_intersect_violation,
         },
         vertex_violations,
         deform_violations,
+        intersect_violations,
     };
 }

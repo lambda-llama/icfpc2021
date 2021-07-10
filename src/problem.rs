@@ -178,6 +178,15 @@ impl Problem {
         return self.poly.euclidean_distance(&p);
     }
 
+    pub fn edge_intersections(&self, src_pos: Point, dst_pos: Point) -> f64 {
+        let edge = geo::Line::new(src_pos.convert(), dst_pos.convert());
+        // TODO: Count weighted intersections with edges of polygon.
+        if self.poly.contains(&edge) {
+            return 0.0;
+        }
+        return 1.0;
+    }
+
     pub fn bounding_box(&self) -> (Point, Point) {
         let mut min_p = Point {
             x: i64::MAX,
