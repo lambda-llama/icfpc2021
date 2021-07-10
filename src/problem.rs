@@ -213,8 +213,15 @@ impl Problem {
                 pose.vertices[e.v0].convert(),
                 pose.vertices[e.v1].convert(),
             ]);
-            let relation = self.poly.relate(&s);
-            if !relation.is_contains() {
+            let polygon_points = self.poly.exterior().clone().into_points();
+            let mut boundary_countains = false;
+            for i in 0..polygon_points.len() - 1 {
+                let t = geo::LineString::from(vec![polygon_points[i], polygon_points[i + 1]]);
+                if t.contains(&s) {
+                    boundary_countains = true;
+                }
+            }
+            if !(self.poly.contains(&s) || boundary_countains) {
                 return false;
             }
         }
