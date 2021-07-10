@@ -120,8 +120,7 @@ struct Translator {
     y_offset: f32,
     zero: Point,
     max: Point,
-    x_step: f32,
-    y_step: f32,
+    step: f32,
 }
 
 impl Translator {
@@ -129,27 +128,27 @@ impl Translator {
         let (min_p, max_p) = p.bounding_box();
         let x_step = width / ((max_p.x - min_p.x) as f32);
         let y_step = height / ((max_p.y - min_p.y) as f32);
+        let step = x_step.min(y_step);
         return Translator {
             x_offset,
             y_offset,
             zero: min_p,
             max: max_p,
-            x_step,
-            y_step,
+            step,
         };
     }
 
     fn translate(&self, p: &Point) -> Vector2 {
         return Vector2::new(
-            ((p.x - self.zero.x) as f32) * self.x_step + self.x_offset,
-            ((p.y - self.zero.y) as f32) * self.y_step + self.y_offset,
+            ((p.x - self.zero.x) as f32) * self.step + self.x_offset,
+            ((p.y - self.zero.y) as f32) * self.step + self.y_offset,
         );
     }
 
     fn untranslate(&self, v: &Vector2) -> Point {
         return Point {
-            x: ((v.x - self.x_offset) / self.x_step + (self.zero.x as f32)).round() as i64,
-            y: ((v.y - self.y_offset) / self.y_step + (self.zero.y as f32)).round() as i64,
+            x: ((v.x - self.x_offset) / self.step + (self.zero.x as f32)).round() as i64,
+            y: ((v.y - self.y_offset) / self.step + (self.zero.y as f32)).round() as i64,
         };
     }
 }
