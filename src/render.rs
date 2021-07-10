@@ -20,6 +20,7 @@ struct GuiState {
 
     // Dragging
     pub dragged_point: Option<usize>,
+    pub viewport_drag_point: Option<Vector2>,
     // Selection
     pub selection_pos: Option<Vector2>,
     pub selected_points: HashSet<usize>,
@@ -58,6 +59,7 @@ impl GuiState {
         Ok(GuiState {
             translator,
             dragged_point: None,
+            viewport_drag_point: None,
             selection_pos: None,
             selected_points: HashSet::new(),
             fold_points: HashSet::new(),
@@ -92,10 +94,11 @@ impl GuiState {
     }
 
     fn create_translator(problem: &Problem) -> Translator {
-        const VIEWPORT_OFFSET_X: f32 = 20.0;
-        const VIEWPORT_OFFSET_Y: f32 = 45.0;
-        const VIEWPORT_WIDTH: f32 = 600.0;
-        const VIEWPORT_HEIGHT: f32 = 600.0;
+        const MARGIN: f32 = 75.0;
+        const VIEWPORT_OFFSET_X: f32 = MARGIN;
+        const VIEWPORT_OFFSET_Y: f32 = MARGIN;
+        const VIEWPORT_WIDTH: f32 = 1024.0 - 2.0 * MARGIN;
+        const VIEWPORT_HEIGHT: f32 = 768.0 - 2.0 * MARGIN;
         let translator = Translator::new(
             VIEWPORT_OFFSET_X,
             VIEWPORT_OFFSET_Y,
@@ -196,7 +199,7 @@ fn render_gui(
     const HELP_BAR_HEIGHT: f32 = 51.0;
     let mut text = b"\
 Tools: E - Center illegal, Shift+E - Center all, C - Flip horz, V - Flip vert, W - Fold (hold), R - Rotate (hold)\n\
-Selection: Ctrl+A - Select all, Shift adds, Ctrl removes
+Selection/Navigation: Ctrl+A - Select all, Shift adds, Ctrl removes, RMB - Drag viewport
 Misc: S - Save, D - Step solver, F - Run solver, Ctrl+L - Reset solution\n\
 "
     .to_owned();
@@ -497,6 +500,8 @@ pub fn interact<'a>(
                     state.selection_pos = Some(mouse_pos);
                 }
             }
+        } else if rh.is_mouse_button_pressed(MouseButton::MOUSE_RIGHT_BUTTON) {
+            state.viewport_drag_point = Some(mouse_pos);
         }
 
         if rh.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON) {
@@ -530,29 +535,37 @@ pub fn interact<'a>(
                 }
                 state.selection_pos = None;
             }
+        } else if rh.is_mouse_button_released(MouseButton::MOUSE_RIGHT_BUTTON) {
+            state.viewport_drag_point = None;
         }
 
         if rh.get_gesture_detected() == GestureType::GESTURE_DRAG {
-            let mouse_p = state.untranslate(&mouse_pos);
-            if let Some(idx) = state.dragged_point {
-                let diff_p = mouse_p - pose.borrow().vertices[idx];
-                let vertices = &mut pose.borrow_mut().vertices;
-                for &idx in state.selected_points.iter() {
-                    vertices[idx] = vertices[idx] + diff_p;
+            if let Some(p) = state.viewport_drag_point {
+                let delta = mouse_pos - p;
+                state.translator.x_offset += delta.x;
+                state.translator.y_offset += delta.y;
+                state.viewport_drag_point = Some(mouse_pos);
+            } else {
+                let mouse_p = state.untranslate(&mouse_pos);
+                if let Some(idx) = state.dragged_point {
+                    let diff_p = mouse_p - pose.borrow().vertices[idx];
+                    let vertices = &mut pose.borrow_mut().vertices;
+                    for &idx in state.selected_points.iter() {
+                        vertices[idx] = vertices[idx] + diff_p;
+                    }
                 }
-            }
-            if let Some(p) = state.rotate_pivot {
-                // state.rotate_angle_rad
-                let angle = geomath::vector::Vector2::new(
-                    (mouse_p.x - p.x) as f64,
-                    (mouse_p.y - p.y) as f64,
-                )
-                .phi();
-                for &idx in state.selected_points.iter() {
-                    // We need to restore the original point and rotate it to avoid
-                    // rounding errors due to the float angle rotation of int coords
-                    pose.borrow_mut().vertices[idx] = state.rotate_vertices_copy[idx];
-                    pose.borrow_mut().rotate(idx, p, angle);
+                if let Some(p) = state.rotate_pivot {
+                    let angle = geomath::vector::Vector2::new(
+                        (mouse_p.x - p.x) as f64,
+                        (mouse_p.y - p.y) as f64,
+                    )
+                    .phi();
+                    for &idx in state.selected_points.iter() {
+                        // We need to restore the original point and rotate it to avoid
+                        // rounding errors due to the float angle rotation of int coords
+                        pose.borrow_mut().vertices[idx] = state.rotate_vertices_copy[idx];
+                        pose.borrow_mut().rotate(idx, p, angle);
+                    }
                 }
             }
         }
