@@ -199,7 +199,7 @@ fn render_gui(
     const HELP_BAR_HEIGHT: f32 = 51.0;
     let mut text = b"\
 Tools: E - Center illegal, Shift+E - Center all, C - Flip horz, V - Flip vert, W - Fold (hold), R - Rotate (hold)\n\
-Selection/Navigation: Ctrl+A - Select all, Shift adds, Ctrl removes, RMB - Drag viewport
+Selection/Navigation: Ctrl+A - Select all, Shift adds, Ctrl removes, RMB - Drag viewport, Scrollwheel - Zoom
 Misc: S - Save, D - Step solver, F - Run solver, Ctrl+L - Reset solution\n\
 "
     .to_owned();
@@ -502,6 +502,22 @@ pub fn interact<'a>(
             }
         } else if rh.is_mouse_button_pressed(MouseButton::MOUSE_RIGHT_BUTTON) {
             state.viewport_drag_point = Some(mouse_pos);
+        } else {
+            let scroll = rh.get_mouse_wheel_move();
+            let scroll_amount = 0.95;
+            if scroll.abs() > 0.5 {
+                if scroll > 0.0 {
+                    let offset = 2.0 * state.translator.step / scroll_amount;
+                    state.translator.x_offset -= offset;
+                    state.translator.y_offset -= offset;
+                    state.translator.step /= scroll_amount;
+                } else {
+                    let offset = 2.0 * state.translator.step * scroll_amount;
+                    state.translator.x_offset += offset;
+                    state.translator.y_offset += offset;
+                    state.translator.step *= scroll_amount;
+                }
+            }
         }
 
         if rh.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON) {
