@@ -84,11 +84,9 @@ impl Transform for Pose {
     }
 
     fn rotate(&mut self, v: usize, pivot: Point, angle_rad: f64) {
-        dbg!((v, pivot, angle_rad));
         let p = self.vertices[v];
         let mut vec = geomath::vector::Vector2::new((p.x - pivot.x) as f64, (p.y - pivot.y) as f64);
         vec.set_phi(vec.phi() + angle_rad);
-        dbg!((vec.phi(), vec.rho()));
         self.vertices[v] = Point {
             x: pivot.x + vec.x as i64,
             y: pivot.y + vec.y as i64,
