@@ -1,5 +1,6 @@
 use std::fmt::{self, Display, Formatter};
 use std::{cell::RefCell, rc::Rc};
+use geo::algorithm::closest_point::ClosestPoint;
 
 use crate::common::*;
 use crate::problem::{Figure, Point, Pose, Problem};
@@ -97,7 +98,7 @@ impl Solver for AnnealingSolver {
 
                     let mut options = 4;
                     // We can do a mirror rotation in this case.
-                    if problem.figure.vertex_edges[vertex_index].len() == 1 {
+                    if problem.figure.vertex_edges[vertex_index].len() <= 2 {
                         options += 1;
                     }
 
@@ -110,11 +111,29 @@ impl Solver for AnnealingSolver {
                             y: cur_pos.y + step_size * DY[direction],
                         };
                     } else {
-                        let dst_vertex_index = problem.figure.vertex_edges[vertex_index][0].1;
-                        let dst_pos = pose.borrow().vertices[dst_vertex_index];
-                        new_pos = Point {
-                            x: dst_pos.x + (dst_pos.x - cur_pos.x),
-                            y: dst_pos.y + (dst_pos.y - cur_pos.y),
+                        if problem.figure.vertex_edges[vertex_index].len() == 1 {
+                            let dst_vertex_index = problem.figure.vertex_edges[vertex_index][0].1;
+                            let dst_pos = pose.borrow().vertices[dst_vertex_index];
+                            new_pos = Point {
+                                x: dst_pos.x + (dst_pos.x - cur_pos.x),
+                                y: dst_pos.y + (dst_pos.y - cur_pos.y),
+                            }
+                        } else {
+                            let first_dst_vertex_index = problem.figure.vertex_edges[vertex_index][0].1;
+                            let second_dst_vertex_index = problem.figure.vertex_edges[vertex_index][1].1;
+                            let first_dst_pos = pose.borrow().vertices[first_dst_vertex_index].convert();
+                            let second_dst_pos = pose.borrow().vertices[second_dst_vertex_index].convert();
+                            let closest = geo::Line::new(first_dst_pos, second_dst_pos).closest_point(&cur_pos.convert());
+                            if let geo::Closest::SinglePoint(p) = closest {
+                                new_pos = Point {
+                                    x: (p.x() + (p.x() - cur_pos.x as f64)).round() as i64,
+                                    y: (p.y() + (p.y() - cur_pos.y as f64)).round() as i64,
+                                }
+                            } else {
+                                // This is the case when vertex is on the line between two
+                                // neighbors. No-op.
+                                continue;
+                            }
                         }
                     }
 
