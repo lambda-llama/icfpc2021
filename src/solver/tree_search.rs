@@ -24,6 +24,7 @@ impl Solver for TreeSearchSolver {
             let mut parents = vec![(0, 0); figure_size];
             {
                 let mut visited = vec![false; figure_size];
+                // TODO: Start from vertex with max degree.
                 topsort(
                     0,
                     None,
@@ -45,11 +46,11 @@ impl Solver for TreeSearchSolver {
             };
 
             // Do initial placing in coordinates.
-            // TODO: Use only internal coordinates here in the future.
             let (mn, mx) = problem.bounding_box();
             {
                 for x in mn.x..=mx.x {
                     for y in mn.y..=mx.y {
+                        // TODO: Can we process them in some clever order?
                         runner.pose.vertices[0] = Point { x, y };
                         if !problem.contains_point(&runner.pose.vertices[runner.order[0]]) {
                             continue;
@@ -85,6 +86,7 @@ fn topsort(
     }
 
     order.push(v);
+    // TODO: Order destinations by degree.
     for &(edge_index, dst) in &edges[v] {
         if visited[dst] {
             continue;
