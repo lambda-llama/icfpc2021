@@ -108,7 +108,7 @@ fn render_gui(
 
     // Help bar
     let mut text = b"\
-Tools: Q - Move, W - Center\n\
+Tools: Q - Move, W - Center, E - Fold\n\
 Selection: Ctrl+A - Select all, Shift adds, Ctrl removes
 Misc: S - Save, D - Step solver, F - Run solver\n\
 "
