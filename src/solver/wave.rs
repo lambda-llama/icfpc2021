@@ -14,7 +14,7 @@ pub struct WaveSolver {}
 impl Solver for WaveSolver {
     fn solve_gen<'a>(
         &self,
-        problem: &'a Problem,
+        problem: Problem,
         pose: Rc<RefCell<Pose>>,
     ) -> generator::LocalGenerator<'a, (), Rc<RefCell<Pose>>> {
         generator::Gn::new_scoped_local(move |mut s| {
@@ -89,7 +89,7 @@ impl Solver for WaveSolver {
                             if rel.is_within() || rel.is_intersects() {
                                 let v = p.convert();
                                 pose.borrow_mut().vertices[dyn_idx] = v;
-                                let sum = sum_of_diffs(problem, dyn_idx, &pose.borrow());
+                                let sum = sum_of_diffs(&problem, dyn_idx, &pose.borrow());
                                 if sum < best_sum {
                                     best_vertex = v;
                                     best_sum = sum;

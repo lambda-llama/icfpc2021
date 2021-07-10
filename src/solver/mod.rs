@@ -11,15 +11,16 @@ use crate::problem::{Pose, Problem};
 pub trait Solver: Sync {
     fn solve_gen<'a>(
         &self,
-        problem: &'a Problem,
+        problem: Problem,
         pose: Rc<RefCell<Pose>>,
     ) -> generator::LocalGenerator<'a, (), Rc<RefCell<Pose>>>;
 
-    fn solve(&self, problem: &Problem) -> Pose {
+    fn solve(&self, problem: Problem) -> Pose {
+        let vertices = problem.figure.vertices.clone();
         self.solve_gen(
             problem,
             Rc::new(RefCell::new(Pose {
-                vertices: problem.figure.vertices.clone(),
+                vertices,
                 bonuses: vec![],
             })),
         )

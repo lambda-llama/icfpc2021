@@ -51,7 +51,8 @@ fn main() -> Result<()> {
         )
         .subcommand(
             App::new("render")
-                .arg("<INPUT> path/to/N.problem")
+                .arg(Arg::new("INPUT").default_value("./problems"))
+                .arg(Arg::new("ID").short('i').takes_value(true))
                 .arg(Arg::new("SOLVER").short('a').takes_value(true))
                 .arg(Arg::new("SOLUTION").short('s').takes_value(true)),
         )
@@ -100,7 +101,7 @@ fn main() -> Result<()> {
             let pose = solver::SOLVERS
                 .get(name)
                 .expect(&format!("Failed to find solver '{}'", name))
-                .solve(&problem);
+                .solve(problem.clone());
             let dislikes = problem.dislikes(&pose);
             let valid = problem.validate(&pose);
             let time_taken = std::time::Instant::now() - start;
@@ -129,16 +130,15 @@ fn main() -> Result<()> {
             runner::run(problems_path, solutions_base_path, solver_name)?;
         }
         Some(("render", matches)) => {
-            let problem = Problem::from_json(&std::fs::read(matches.value_of("INPUT").unwrap())?)?;
-            let pose = match matches.value_of("SOLUTION") {
-                Some(p) => {
-                    Pose::from_json(&std::fs::read(p).expect("Failed to read solution file"))
-                        .expect("Failed to parse solution file")
-                }
-                None => Pose {
-                    vertices: problem.figure.vertices.clone(),
-                    bonuses: vec![],
-                },
+            let problems_path = std::path::Path::new(matches.value_of("INPUT").unwrap());
+            let solution_path = matches
+                .value_of("SOLUTION")
+                .map(|p| std::path::Path::new(p));
+            let id = match matches.value_of("ID") {
+                Some(i) => i
+                    .parse()
+                    .expect(&format!("Failed to parse problem ID '{}'", i)),
+                None => 1,
             };
             let solver = match matches.value_of("SOLVER") {
                 Some(name) => solver::SOLVERS
@@ -146,7 +146,7 @@ fn main() -> Result<()> {
                     .expect(&format!("Failed to find solver '{}'", name)),
                 None => &solver::SOLVERS["id"],
             };
-            interact(problem, solver, pose)?;
+            interact(problems_path, solution_path, solver, id)?;
         }
         Some(("download", matches)) => {
             portal::SESSION.download_problem(

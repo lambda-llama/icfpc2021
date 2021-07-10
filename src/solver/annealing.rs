@@ -68,7 +68,7 @@ impl ViolationSummary {
 impl Solver for AnnealingSolver {
     fn solve_gen<'a>(
         &self,
-        problem: &'a Problem,
+        problem: Problem,
         pose: Rc<RefCell<Pose>>,
     ) -> generator::LocalGenerator<'a, (), Rc<RefCell<Pose>>> {
         generator::Gn::new_scoped_local(move |mut s| {

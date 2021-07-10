@@ -1,22 +1,22 @@
 use geo::algorithm::contains::Contains;
 use geo::algorithm::euclidean_distance::EuclideanDistance;
+use geo::algorithm::line_intersection::{line_intersection, LineIntersection};
 use geo::relate::Relate;
 use ordered_float::NotNan;
 use serde_derive::{Deserialize, Serialize};
-use geo::algorithm::line_intersection::{line_intersection, LineIntersection};
 
 use crate::common::*;
 
 pub type Point = geo::Coordinate<i64>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Edge {
     pub v0: usize,
     pub v1: usize,
     pub len2: f64,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Figure {
     pub vertices: Vec<Point>,
     pub edges: Vec<Edge>,
@@ -82,7 +82,7 @@ impl Figure {
         }
     }
 
-    pub fn to_float_point(p: Point) -> geo::Point<f64>{
+    pub fn to_float_point(p: Point) -> geo::Point<f64> {
         geo::Point::new(p.x as f64, p.y as f64)
     }
 }
@@ -112,14 +112,14 @@ impl From<BonusType> for String {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BonusUnlock {
     pub position: Point,
     pub bonus: BonusType,
     pub problem: u32,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Problem {
     pub hole: Vec<Point>,
     pub poly: geo::Polygon<f64>,
@@ -263,26 +263,37 @@ impl Problem {
         let mut intersections = 0.0;
         for poly_line in self.poly.exterior().lines() {
             match line_intersection(poly_line, edge) {
-                None => {},
-                Some(LineIntersection::SinglePoint { intersection, is_proper }) => {
+                None => {}
+                Some(LineIntersection::SinglePoint {
+                    intersection,
+                    is_proper,
+                }) => {
                     if is_proper {
-                        let int_point: geo::Point::<f64> = intersection.into();
+                        let int_point: geo::Point<f64> = intersection.into();
                         intersections += std::cmp::min(
                             std::cmp::min(
-                                NotNan::new(int_point.euclidean_distance(&poly_line.start_point())).unwrap(),
-                                NotNan::new(int_point.euclidean_distance(&poly_line.end_point())).unwrap()),
+                                NotNan::new(int_point.euclidean_distance(&poly_line.start_point()))
+                                    .unwrap(),
+                                NotNan::new(int_point.euclidean_distance(&poly_line.end_point()))
+                                    .unwrap(),
+                            ),
                             std::cmp::min(
-                                NotNan::new(int_point.euclidean_distance(&edge.start_point())).unwrap(),
-                                NotNan::new(int_point.euclidean_distance(&edge.end_point())).unwrap()),
-
-                        ).into_inner();
+                                NotNan::new(int_point.euclidean_distance(&edge.start_point()))
+                                    .unwrap(),
+                                NotNan::new(int_point.euclidean_distance(&edge.end_point()))
+                                    .unwrap(),
+                            ),
+                        )
+                        .into_inner();
                     }
-                },
+                }
                 Some(LineIntersection::Collinear { intersection }) => {
                     if !poly_line.contains(&edge) {
-                        intersections += intersection.start_point().euclidean_distance(&intersection.end_point());
+                        intersections += intersection
+                            .start_point()
+                            .euclidean_distance(&intersection.end_point());
                     }
-                },
+                }
             }
         }
         return intersections;

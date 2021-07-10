@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ffi::CString;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::{thread, time};
 
@@ -20,20 +21,101 @@ enum Tool {
 }
 
 struct GuiState {
+    // Coord translator
+    pub translator: Translator,
+
     pub tool: Tool,
+    // Dragging
     pub dragged_point: Option<usize>,
+    // Selection
     pub selection_pos: Option<Vector2>,
     pub selected_points: HashSet<usize>,
+    // Folding
     pub fold_points: HashSet<usize>,
+    // Problem browser
+    pub problems: Vec<CString>,
+    pub problems_focus_idx: i32,
+    pub problems_scroll_idx: i32,
+    pub problems_selected: i32,
+
+    // Problem/solution
+    pub problems_path: PathBuf,
+    pub solver: &'static Box<dyn Solver>,
 }
 
 impl GuiState {
+    pub fn new(
+        problems_path: &Path,
+        problem: &Problem,
+        solver: &'static Box<dyn Solver>,
+        id: u32,
+    ) -> Result<Self> {
+        let translator = Self::create_translator(problem);
+
+        let problems_count = problems_path.read_dir()?.count();
+        let problems = (1..=problems_count)
+            .into_iter()
+            .map(|id| CString::new(format!("{}", id)).unwrap())
+            .collect();
+
+        Ok(GuiState {
+            translator,
+            tool: Tool::Move,
+            dragged_point: None,
+            selection_pos: None,
+            selected_points: HashSet::new(),
+            fold_points: HashSet::new(),
+            problems,
+            problems_focus_idx: 0,
+            problems_scroll_idx: 0,
+            problems_selected: (id - 1) as i32,
+            problems_path: problems_path.to_owned(),
+            solver,
+        })
+    }
+
+    fn load_problem_ex(problems_path: &Path, id: u32) -> Result<Problem> {
+        Problem::from_json(&std::fs::read(
+            problems_path.join(format!("{}.problem", id)),
+        )?)
+    }
+
+    pub fn load_problem(&mut self) -> Result<Problem> {
+        let problem =
+            Self::load_problem_ex(&self.problems_path, (self.problems_selected + 1) as u32)?;
+        self.translator = Self::create_translator(&problem);
+        Ok(problem)
+    }
+
     pub fn switch_tool(&mut self, tool: Tool) {
         self.tool = tool;
         self.dragged_point = None;
         self.selection_pos = None;
         self.selected_points.clear();
         self.fold_points.clear();
+    }
+
+    fn create_translator(problem: &Problem) -> Translator {
+        const VIEWPORT_OFFSET_X: f32 = 20.0;
+        const VIEWPORT_OFFSET_Y: f32 = 45.0;
+        const VIEWPORT_WIDTH: f32 = 600.0;
+        const VIEWPORT_HEIGHT: f32 = 600.0;
+        let translator = Translator::new(
+            VIEWPORT_OFFSET_X,
+            VIEWPORT_OFFSET_Y,
+            VIEWPORT_WIDTH,
+            VIEWPORT_HEIGHT,
+            problem,
+        );
+        translator
+    }
+
+    pub fn translate(&self, p: &Point) -> Vector2 {
+        self.translator.translate(p)
+    }
+
+    pub fn untranslate(&self, v: &Vector2) -> Point {
+        self.translator.untranslate(v)
     }
 }
 
@@ -79,10 +161,10 @@ impl Translator {
 fn render_gui(
     d: &mut RaylibDrawHandle,
     thread: &RaylibThread,
-    state: &GuiState,
+    state: &mut GuiState,
     problem: &Problem,
     pose: &Pose,
-) {
+) -> i32 {
     // Window title
     d.set_window_title(
         &thread,
@@ -95,33 +177,55 @@ fn render_gui(
     );
 
     // Status bar
+    const STATUS_BAR_HEIGHT: f32 = 25.0;
     let text = format!("Tool: {:?}", state.tool);
     d.gui_status_bar(
         Rectangle {
             x: 0.0,
             y: 0.0,
             width: d.get_screen_width() as f32,
-            height: 25.0,
+            height: STATUS_BAR_HEIGHT,
         },
         Some(&CString::new(text).unwrap()),
     );
 
     // Help bar
+    const HELP_BAR_HEIGHT: f32 = 51.0;
     let mut text = b"\
 Tools: Q - Move, W - Center, E - Fold\n\
 Selection: Ctrl+A - Select all, Shift adds, Ctrl removes
-Misc: S - Save, D - Step solver, F - Run solver\n\
+Misc: S - Save, D - Step solver, F - Run solver, Ctrl+L - Reset solution\n\
 "
     .to_owned();
     d.gui_text_box_multi(
         Rectangle {
             x: 0.0,
-            y: d.get_screen_height() as f32 - 51.0,
+            y: d.get_screen_height() as f32 - HELP_BAR_HEIGHT,
             width: d.get_screen_width() as f32,
-            height: 51.0,
+            height: HELP_BAR_HEIGHT,
         },
         &mut text,
         false,
+    );
+
+    // Problem selector
+    const PROBLEM_SELECTOR_WIDTH: f32 = 40.0;
+    let problems = state
+        .problems
+        .iter()
+        .map(|s| s.as_c_str())
+        .collect::<Vec<_>>();
+    let selected_problem = d.gui_list_view_ex(
+        Rectangle {
+            x: d.get_screen_width() as f32 - PROBLEM_SELECTOR_WIDTH,
+            y: STATUS_BAR_HEIGHT,
+            width: PROBLEM_SELECTOR_WIDTH,
+            height: d.get_screen_height() as f32 - STATUS_BAR_HEIGHT - HELP_BAR_HEIGHT,
+        },
+        &problems[..],
+        &mut state.problems_focus_idx,
+        &mut state.problems_scroll_idx,
+        state.problems_selected,
     );
 
     // Selection window
@@ -129,15 +233,11 @@ Misc: S - Save, D - Step solver, F - Run solver\n\
         let rect = vec2_to_rect(pos, d.get_mouse_position());
         d.draw_rectangle_lines_ex(rect, 1, Color::DARKGRAY);
     }
+
+    selected_problem
 }
 
-fn render_problem(
-    d: &mut RaylibDrawHandle,
-    state: &GuiState,
-    t: &Translator,
-    problem: &Problem,
-    pose: &Pose,
-) {
+fn render_problem(d: &mut RaylibDrawHandle, state: &GuiState, problem: &Problem, pose: &Pose) {
     const POINT_RADIUS: f32 = 5.0;
     const POINT_RADIUS_BONUS_UNLOCK: f32 = 6.0;
     const POINT_RADIUS_GRID_HIGHLIGHT: f32 = 2.0;
@@ -162,8 +262,8 @@ fn render_problem(
             .map(|&(e, v)| (v, problem.figure.edge_len2_bounds(e)))
             .collect::<Vec<_>>()
     });
-    for x in t.zero.x..t.max.x {
-        for y in t.zero.y..t.max.y {
+    for x in state.translator.zero.x..state.translator.max.x {
+        for y in state.translator.zero.y..state.translator.max.y {
             let (all, any) = if let Some(connected_edge_bounds) = connected_edge_bounds.as_ref() {
                 let mut all = true;
                 let mut any = false;
@@ -180,7 +280,7 @@ fn render_problem(
             } else {
                 (false, false)
             };
-            let grid_point = t.translate(&Point { x, y });
+            let grid_point = state.translate(&Point { x, y });
             if all {
                 d.draw_circle_v(
                     grid_point,
@@ -198,11 +298,11 @@ fn render_problem(
     // Hole
     let mut last_p: Option<&Point> = problem.hole.last();
     for p in problem.hole.iter() {
-        d.draw_circle_v(t.translate(&p), POINT_RADIUS, COLOR_HOLE);
+        d.draw_circle_v(state.translate(&p), POINT_RADIUS, COLOR_HOLE);
         match last_p {
             Some(pp) => d.draw_line_ex(
-                t.translate(&pp),
-                t.translate(&p),
+                state.translate(&pp),
+                state.translate(&p),
                 LINE_THICKNESS_HOLE,
                 COLOR_HOLE,
             ),
@@ -214,7 +314,7 @@ fn render_problem(
     // Bonus unlocks
     for b in problem.bonuses.iter() {
         d.draw_circle_v(
-            t.translate(&b.position),
+            state.translate(&b.position),
             POINT_RADIUS_BONUS_UNLOCK,
             COLOR_BONUS_UNLOCK,
         );
@@ -223,8 +323,8 @@ fn render_problem(
     // Edges
     for (idx, e) in problem.figure.edges.iter().enumerate() {
         d.draw_line_ex(
-            t.translate(&pose.vertices[e.v0 as usize]),
-            t.translate(&pose.vertices[e.v1 as usize]),
+            state.translate(&pose.vertices[e.v0 as usize]),
+            state.translate(&pose.vertices[e.v1 as usize]),
             LINE_THICKNESS_EDGE,
             match problem.figure.test_edge_len2(idx, pose) {
                 EdgeTestResult::Ok => COLOR_EDGE_OK,
@@ -241,7 +341,7 @@ fn render_problem(
         } else {
             COLOR_VERTEX
         };
-        d.draw_circle_v(t.translate(p), POINT_RADIUS, color);
+        d.draw_circle_v(state.translate(p), POINT_RADIUS, color);
     }
 }
 
@@ -272,50 +372,61 @@ fn hit_test_rect(pose: &Pose, min: Point, max: Point) -> Vec<usize> {
         .collect()
 }
 
-pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> Result<()> {
+pub fn interact<'a>(
+    problems_path: &Path,
+    solution_path: Option<&Path>,
+    solver: &'static Box<dyn Solver>,
+    id: u32,
+) -> Result<()> {
     use raylib::consts::*;
 
     const WINDOW_WIDTH: i32 = 1024;
     const WINDOW_HEIGHT: i32 = 768;
 
-    const VIEWPORT_OFFSET_X: f32 = 20.0;
-    const VIEWPORT_OFFSET_Y: f32 = 45.0;
-    const VIEWPORT_WIDTH: f32 = 600.0;
-    const VIEWPORT_HEIGHT: f32 = 600.0;
-
     let (mut rh, thread) = raylib::init().size(WINDOW_WIDTH, WINDOW_HEIGHT).build();
 
-    let t = Translator::new(
-        VIEWPORT_OFFSET_X,
-        VIEWPORT_OFFSET_Y,
-        VIEWPORT_WIDTH,
-        VIEWPORT_HEIGHT,
-        &problem,
-    );
+    let mut problem = GuiState::load_problem_ex(problems_path, id)?;
+    let mut state = GuiState::new(problems_path, &problem, solver, id)?;
 
-    let mut gen = solver.solve_gen(&problem, Rc::new(RefCell::new(pose)));
-    let pose = gen.resume().unwrap();
-
-    let mut state = GuiState {
-        tool: Tool::Move,
-        dragged_point: None,
-        selection_pos: None,
-        selected_points: HashSet::new(),
-        fold_points: HashSet::new(),
+    let pose = match solution_path {
+        Some(p) => Pose::from_json(&std::fs::read(p).expect("Failed to read solution file"))
+            .expect("Failed to parse solution file"),
+        None => Pose {
+            vertices: problem.figure.vertices.clone(),
+            bonuses: vec![],
+        },
     };
+
+    let mut gen = state
+        .solver
+        .solve_gen(problem.clone(), Rc::new(RefCell::new(pose)));
+    let mut pose = gen.resume().unwrap();
 
     while !rh.window_should_close() {
         {
             let mut d = rh.begin_drawing(&thread);
             d.clear_background(Color::WHITE);
-            render_problem(&mut d, &state, &t, &problem, &pose.borrow());
-            render_gui(&mut d, &thread, &state, &problem, &pose.borrow());
+            render_problem(&mut d, &state, &problem, &pose.borrow());
+            let selected_problem =
+                render_gui(&mut d, &thread, &mut state, &problem, &pose.borrow());
+            if selected_problem != -1 && state.problems_selected != selected_problem {
+                state.problems_selected = selected_problem;
+                problem = state.load_problem()?;
+                gen = state.solver.solve_gen(
+                    problem.clone(),
+                    Rc::new(RefCell::new(Pose {
+                        vertices: problem.figure.vertices.clone(),
+                        bonuses: vec![],
+                    })),
+                );
+                pose = gen.resume().unwrap();
+            }
         }
 
         let mouse_pos = rh.get_mouse_position();
 
         if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
-            let mouse_p = t.untranslate(&mouse_pos);
+            let mouse_p = state.untranslate(&mouse_pos);
             let v_idx = hit_test_point(&pose.borrow(), mouse_p, 2);
             match state.tool {
                 Tool::Move => {
@@ -366,11 +477,11 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
             state.dragged_point = None;
             if let Some(pos) = state.selection_pos {
                 let rect = vec2_to_rect(pos, mouse_pos);
-                let min = t.untranslate(&Vector2 {
+                let min = state.untranslate(&Vector2 {
                     x: rect.x,
                     y: rect.y,
                 });
-                let max = t.untranslate(&Vector2 {
+                let max = state.untranslate(&Vector2 {
                     x: rect.x + rect.width,
                     y: rect.y + rect.height,
                 });
@@ -394,7 +505,7 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
         }
 
         if rh.get_gesture_detected() == GestureType::GESTURE_DRAG {
-            let mouse_p = t.untranslate(&mouse_pos);
+            let mouse_p = state.untranslate(&mouse_pos);
             if let Some(idx) = state.dragged_point {
                 let diff_p = mouse_p - pose.borrow().vertices[idx];
                 let vertices = &mut pose.borrow_mut().vertices;
@@ -429,6 +540,16 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
                     } else {
                         warn!("No more steps in the solver");
                     }
+                }
+                KeyboardKey::KEY_L if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) => {
+                    gen = state.solver.solve_gen(
+                        problem.clone(),
+                        Rc::new(RefCell::new(Pose {
+                            vertices: problem.figure.vertices.clone(),
+                            bonuses: vec![],
+                        })),
+                    );
+                    pose = gen.resume().unwrap();
                 }
                 _ => {}
             }

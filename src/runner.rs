@@ -34,7 +34,7 @@ pub fn run(
                 std::fs::create_dir_all(&solutions_path)?;
                 let solver = SOLVERS.get(name).unwrap();
                 let start = std::time::Instant::now();
-                let pose = solver.solve(&problem);
+                let pose = solver.solve(problem.clone());
                 let time_taken = std::time::Instant::now() - start;
                 let dislikes = problem.dislikes(&pose);
                 let valid = problem.validate(&pose);

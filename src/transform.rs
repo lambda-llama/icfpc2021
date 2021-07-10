@@ -16,11 +16,16 @@ pub trait Transform {
 impl Transform for Pose {
     fn fold(&mut self, _f: &Figure, _v1: usize, _v2: usize, _vcomp: usize) {
         let n = _f.vertices.len();
-        let mut components =  vec![-1; n];
+        let mut components = vec![-1; n];
         components[_v1] = 0;
         components[_v2] = 0;
 
-        fn dfs(u: usize, vertex_edges: &Vec<Vec<(usize, usize)>>, components: &mut Vec<i32>, cid: usize) {
+        fn dfs(
+            u: usize,
+            vertex_edges: &Vec<Vec<(usize, usize)>>,
+            components: &mut Vec<i32>,
+            cid: usize,
+        ) {
             components[u] = cid as i32;
             for &(_, v) in &vertex_edges[u] {
                 if components[v] == -1 {
@@ -29,7 +34,7 @@ impl Transform for Pose {
             }
         }
         let mut cid = 1;
-        for u in 0 .. n {
+        for u in 0..n {
             if components[u] == -1 {
                 dfs(u, &_f.vertex_edges, &mut components, cid);
                 cid += 1;
