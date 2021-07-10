@@ -189,7 +189,7 @@ impl Problem {
         let poly = geo::Polygon::new(geo::LineString::from(border), vec![]);
 
         let (mn, mx) = bounding_box(&hole);
-        let mut inside_points = vec![vec![false; 101]; 101];
+        let mut inside_points = vec![vec![false; mx.y as usize + 1]; mx.x as usize + 1];
         let mut inside_segments = HashSet::new();
         for x in mn.x..=mx.x {
             for y in mn.y..=mx.y {
@@ -291,7 +291,11 @@ impl Problem {
     }
 
     pub fn contains_point(&self, p: &Point) -> bool {
-        if p.x < 0 || p.x > 100 || p.y < 0 || p.y > 100 {
+        if p.x < 0
+            || p.x >= self.inside_points.len() as i64
+            || p.y < 0
+            || p.y >= self.inside_points[0].len() as i64
+        {
             return false;
         }
         self.inside_points[p.x as usize][p.y as usize]
