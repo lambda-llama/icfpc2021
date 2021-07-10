@@ -17,6 +17,7 @@ mod problem;
 mod render;
 mod runner;
 mod solver;
+mod transform;
 
 use crate::common::*;
 
