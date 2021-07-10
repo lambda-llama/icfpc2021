@@ -13,6 +13,12 @@ pub trait Transform {
 
     // Rotate a vertex around the pivot
     fn rotate(&mut self, v: usize, pivot: Point, angle_rad: f64);
+
+    // Flip the point horizontally inside the region
+    fn flip_h(&mut self, v: usize, region: (Point, Point));
+
+    // Flip the point vertically inside the region
+    fn flip_v(&mut self, v: usize, region: (Point, Point));
 }
 
 impl Transform for Pose {
@@ -91,5 +97,21 @@ impl Transform for Pose {
             x: pivot.x + vec.x as i64,
             y: pivot.y + vec.y as i64,
         };
+    }
+
+    fn flip_h(&mut self, v: usize, (min, max): (Point, Point)) {
+        let p = self.vertices[v];
+        self.vertices[v] = Point {
+            x: min.x + (max.x - p.x),
+            y: p.y,
+        }
+    }
+
+    fn flip_v(&mut self, v: usize, (min, max): (Point, Point)) {
+        let p = self.vertices[v];
+        self.vertices[v] = Point {
+            x: p.x,
+            y: min.y + (max.y - p.y),
+        }
     }
 }

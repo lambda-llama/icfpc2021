@@ -4,8 +4,8 @@ mod annealing;
 mod cons;
 mod id;
 mod jammer;
-mod wave;
 mod tree_search;
+mod wave;
 
 use crate::problem::{Pose, Problem};
 

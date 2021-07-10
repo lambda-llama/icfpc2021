@@ -195,7 +195,7 @@ fn render_gui(
     // Help bar
     const HELP_BAR_HEIGHT: f32 = 51.0;
     let mut text = b"\
-Tools: E - Center illegal, Shift+E - Center all, W - Fold (hold), R - Rotate (hold)\n\
+Tools: E - Center illegal, Shift+E - Center all, C - Flip horz, V - Flip vert, W - Fold (hold), R - Rotate (hold)\n\
 Selection: Ctrl+A - Select all, Shift adds, Ctrl removes
 Misc: S - Save, D - Step solver, F - Run solver, Ctrl+L - Reset solution\n\
 "
@@ -590,6 +590,16 @@ pub fn interact<'a>(
                     for idx in points {
                         pose.borrow_mut()
                             .center(&problem.figure, idx, problem.bounding_box());
+                    }
+                }
+                KeyboardKey::KEY_C => {
+                    for &idx in state.selected_points.iter() {
+                        pose.borrow_mut().flip_h(idx, problem.bounding_box());
+                    }
+                }
+                KeyboardKey::KEY_V => {
+                    for &idx in state.selected_points.iter() {
+                        pose.borrow_mut().flip_v(idx, problem.bounding_box());
                     }
                 }
                 KeyboardKey::KEY_A if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) => {

@@ -191,9 +191,9 @@ impl Problem {
         let (mn, mx) = bounding_box(&hole);
         let mut inside_points = HashSet::new();
         let mut inside_segments = HashSet::new();
-        for x in mn.x..mx.x+1 {
-            for y in mn.y..mx.y+1 {
-                let p = Point{x, y};
+        for x in mn.x..mx.x + 1 {
+            for y in mn.y..mx.y + 1 {
+                let p = Point { x, y };
                 if is_point_belongs_to_poly(&poly, p) {
                     // TODO: Currently it slows down startup of the render mode. We need to do it in a lazy way.
                     // for &q in &inside_points {
@@ -277,15 +277,13 @@ impl Problem {
         // 1 - vertices are inside
         for &p in &pose.vertices {
             if !is_point_belongs_to_poly(&self.poly, p) {
-                return false
+                return false;
             }
         }
         // 2 - edges are inside
         for e in &self.figure.edges {
-            if !is_segment_belongs_to_poly(
-                &self.poly,
-                (pose.vertices[e.v0], pose.vertices[e.v1])) {
-                return false
+            if !is_segment_belongs_to_poly(&self.poly, (pose.vertices[e.v0], pose.vertices[e.v1])) {
+                return false;
             }
         }
         true
