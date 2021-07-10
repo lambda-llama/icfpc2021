@@ -17,7 +17,6 @@ use crate::transform::Transform;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Tool {
     Move,
-    Fold,
 }
 
 struct GuiState {
@@ -288,6 +287,7 @@ fn render_problem(d: &mut RaylibDrawHandle, state: &GuiState, problem: &Problem,
     const COLOR_BONUS_UNLOCK: Color = Color::GOLD;
     const COLOR_VERTEX: Color = Color::DARKGREEN;
     const COLOR_VERTEX_SELECTED: Color = Color::GREEN;
+    const COLOR_VERTEX_SELECTED2: Color = Color::MAGENTA;
     const COLOR_EDGE_OK: Color = Color::GREEN;
     const COLOR_EDGE_TOO_SHORT: Color = Color::BLUE;
     const COLOR_EDGE_TOO_LONG: Color = Color::RED;
@@ -373,7 +373,9 @@ fn render_problem(d: &mut RaylibDrawHandle, state: &GuiState, problem: &Problem,
 
     // Vertices
     for (idx, p) in pose.vertices.iter().enumerate() {
-        let color = if state.selected_points.contains(&idx) || state.fold_points.contains(&idx) {
+        let color = if state.fold_points.contains(&idx) {
+            COLOR_VERTEX_SELECTED2
+        } else if state.selected_points.contains(&idx) {
             COLOR_VERTEX_SELECTED
         } else {
             COLOR_VERTEX
@@ -471,6 +473,27 @@ pub fn interact<'a>(
                     if rh.is_key_down(KeyboardKey::KEY_R) {
                         state.rotate_pivot = Some(mouse_p);
                         state.rotate_vertices_copy = pose.borrow().vertices.clone();
+                    } else if rh.is_key_down(KeyboardKey::KEY_W) {
+                        if let Some(idx) = v_idx {
+                            if state.fold_points.contains(&idx) {
+                                state.fold_points.remove(&idx);
+                            } else {
+                                if state.fold_points.len() < 2 {
+                                    state.fold_points.insert(idx);
+                                } else {
+                                    let mut points =
+                                        state.fold_points.iter().cloned().collect::<Vec<_>>();
+                                    points.sort_unstable();
+                                    pose.borrow_mut().fold(
+                                        &problem.figure,
+                                        points[0],
+                                        points[1],
+                                        idx,
+                                    );
+                                    state.fold_points.clear();
+                                }
+                            }
+                        }
                     } else {
                         state.dragged_point = v_idx;
                         if let Some(idx) = v_idx {
@@ -487,24 +510,6 @@ pub fn interact<'a>(
                             }
                         } else {
                             state.selection_pos = Some(mouse_pos);
-                        }
-                    }
-                }
-                Tool::Fold => {
-                    if let Some(idx) = v_idx {
-                        if state.fold_points.contains(&idx) {
-                            state.fold_points.remove(&idx);
-                        } else {
-                            if state.fold_points.len() < 2 {
-                                state.fold_points.insert(idx);
-                            } else {
-                                let mut points =
-                                    state.fold_points.iter().cloned().collect::<Vec<_>>();
-                                points.sort_unstable();
-                                pose.borrow_mut()
-                                    .fold(&problem.figure, points[0], points[1], idx);
-                                state.fold_points.clear();
-                            }
                         }
                     }
                 }
@@ -573,7 +578,6 @@ pub fn interact<'a>(
         if let Some(key) = rh.get_key_pressed() {
             match key {
                 KeyboardKey::KEY_Q => state.switch_tool(Tool::Move),
-                KeyboardKey::KEY_W => state.switch_tool(Tool::Fold),
                 KeyboardKey::KEY_E => {
                     let points = if rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT) {
                         state.selected_points.iter().cloned().collect::<Vec<_>>()
