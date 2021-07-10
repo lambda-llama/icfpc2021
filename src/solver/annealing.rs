@@ -1,4 +1,6 @@
 use geo::algorithm::closest_point::ClosestPoint;
+use rand::distributions::WeightedIndex;
+use rand::prelude::*;
 use std::fmt::{self, Display, Formatter};
 use std::{cell::RefCell, rc::Rc};
 
@@ -88,128 +90,168 @@ impl Solver for AnnealingSolver {
                 "temp: {:.5}, cur_summary: {}",
                 temperature, cur_violation_state.summary,
             );
+
+            let weights = [
+                1, // Global move.
+                1000,    // Local move.
+            ];
+            let dist = WeightedIndex::new(&weights).unwrap();
+
             while temperature > END_T {
                 let step_size = 1;
                 for inner_it in 0..INNER_IT {
                     // Choose a random change to pos.
-                    // let vertex_index: usize =
-                    //     rng.gen::<usize>() % pose.borrow().vertices.len();
-                    let vertex_index: usize = inner_it % pose.borrow().vertices.len();
-                    let cur_pos = pose.borrow().vertices[vertex_index];
+                    let action = dist.sample(&mut rng);
+                    if action == 0 {
+                        // Global move.
+                        let choice = rng.gen::<usize>() % 4;
+                        let new_pose = (*pose).clone();
+                        for mut v in &mut new_pose.borrow_mut().vertices {
+                            v.x += DX[choice];
+                            v.y += DY[choice];
+                        }
 
-                    let mut options = 4;
-                    // We can do a mirror rotation in this case.
-                    if problem.figure.vertex_edges[vertex_index].len() <= 2 {
-                        options += 1;
-                    }
+                        let new_violation_state =
+                            compute_violation_state(&new_pose.borrow(), &problem);
 
-                    let new_pos;
-                    let choice = rng.gen::<usize>() % options;
-                    if choice < 4 {
-                        let direction: usize = choice;
-                        new_pos = Point {
-                            x: cur_pos.x + step_size * DX[direction],
-                            y: cur_pos.y + step_size * DY[direction],
-                        };
-                    } else {
-                        if problem.figure.vertex_edges[vertex_index].len() == 1 {
-                            let dst_vertex_index = problem.figure.vertex_edges[vertex_index][0].1;
-                            let dst_pos = pose.borrow().vertices[dst_vertex_index];
-                            new_pos = Point {
-                                x: dst_pos.x + (dst_pos.x - cur_pos.x),
-                                y: dst_pos.y + (dst_pos.y - cur_pos.y),
+                        let cur_energy = cur_violation_state.summary.energy();
+                        let new_energy = new_violation_state.summary.energy();
+
+                        if accept_energy(cur_energy, new_energy, temperature, &mut rng) {
+                            pose.replace(new_pose.borrow().clone());
+                            cur_violation_state = new_violation_state;
+
+                            // Compare it with best score.
+                            if new_energy < best_violation_summary.energy() {
+                                best_violation_summary = cur_violation_state.summary.clone();
+                                best_pose = Rc::new((*pose).clone());
+                                s.yield_(best_pose.clone());
+                                info!("[G] Better pose: {}", best_violation_summary);
                             }
+                        }
+                    } else if action == 1 {
+                        // Local move.
+                        let vertex_index: usize = inner_it % pose.borrow().vertices.len();
+                        let cur_pos = pose.borrow().vertices[vertex_index];
+
+                        let mut options = 4;
+                        // We can do a mirror rotation in this case.
+                        if problem.figure.vertex_edges[vertex_index].len() <= 2 {
+                            options += 1;
+                        }
+
+                        let new_pos;
+                        let choice = rng.gen::<usize>() % options;
+                        if choice < 4 {
+                            let direction: usize = choice;
+                            new_pos = Point {
+                                x: cur_pos.x + step_size * DX[direction],
+                                y: cur_pos.y + step_size * DY[direction],
+                            };
                         } else {
-                            let first_dst_vertex_index =
-                                problem.figure.vertex_edges[vertex_index][0].1;
-                            let second_dst_vertex_index =
-                                problem.figure.vertex_edges[vertex_index][1].1;
-                            let first_dst_pos =
-                                pose.borrow().vertices[first_dst_vertex_index].convert();
-                            let second_dst_pos =
-                                pose.borrow().vertices[second_dst_vertex_index].convert();
-                            let closest = geo::Line::new(first_dst_pos, second_dst_pos)
-                                .closest_point(&cur_pos.convert());
-                            if let geo::Closest::SinglePoint(p) = closest {
+                            if problem.figure.vertex_edges[vertex_index].len() == 1 {
+                                let dst_vertex_index =
+                                    problem.figure.vertex_edges[vertex_index][0].1;
+                                let dst_pos = pose.borrow().vertices[dst_vertex_index];
                                 new_pos = Point {
-                                    x: (p.x() + (p.x() - cur_pos.x as f64)).round() as i64,
-                                    y: (p.y() + (p.y() - cur_pos.y as f64)).round() as i64,
+                                    x: dst_pos.x + (dst_pos.x - cur_pos.x),
+                                    y: dst_pos.y + (dst_pos.y - cur_pos.y),
                                 }
                             } else {
-                                // This is the case when vertex is on the line between two
-                                // neighbors. No-op.
-                                continue;
+                                let first_dst_vertex_index =
+                                    problem.figure.vertex_edges[vertex_index][0].1;
+                                let second_dst_vertex_index =
+                                    problem.figure.vertex_edges[vertex_index][1].1;
+                                let first_dst_pos =
+                                    pose.borrow().vertices[first_dst_vertex_index].convert();
+                                let second_dst_pos =
+                                    pose.borrow().vertices[second_dst_vertex_index].convert();
+                                let closest = geo::Line::new(first_dst_pos, second_dst_pos)
+                                    .closest_point(&cur_pos.convert());
+                                if let geo::Closest::SinglePoint(p) = closest {
+                                    new_pos = Point {
+                                        x: (p.x() + (p.x() - cur_pos.x as f64)).round() as i64,
+                                        y: (p.y() + (p.y() - cur_pos.y as f64)).round() as i64,
+                                    }
+                                } else {
+                                    // This is the case when vertex is on the line between two
+                                    // neighbors. No-op.
+                                    continue;
+                                }
                             }
                         }
-                    }
 
-                    // Do a change.
-                    pose.borrow_mut().vertices[vertex_index] = new_pos;
-                    // Compute dislikes.
-                    let dislikes = problem.dislikes(&pose.borrow());
-                    // Vertex violation.
-                    let vertex_violation = problem.min_distance_to(new_pos);
-                    let delta_vertex_violation =
-                        vertex_violation - cur_violation_state.vertex_violations[vertex_index];
-                    // Edge deformation violation.
-                    // TODO: Take the previous violation from map.
-                    let cur_deform_violation = vertex_edges_deform_violation(
-                        vertex_index,
-                        cur_pos,
-                        &pose,
-                        &problem.figure,
-                    );
-                    let new_deform_violation = vertex_edges_deform_violation(
-                        vertex_index,
-                        new_pos,
-                        &pose,
-                        &problem.figure,
-                    );
-                    let delta_deform_violation = new_deform_violation - cur_deform_violation;
+                        // Compute dislikes.
+                        pose.borrow_mut().vertices[vertex_index] = new_pos;
+                        let dislikes = problem.dislikes(&pose.borrow());
+                        pose.borrow_mut().vertices[vertex_index] = cur_pos;
+                        // Vertex violation.
+                        let vertex_violation = problem.min_distance_to(new_pos);
+                        let delta_vertex_violation =
+                            vertex_violation - cur_violation_state.vertex_violations[vertex_index];
+                        // Edge deformation violation.
+                        // TODO: Take the previous violation from map.
+                        let cur_deform_violation = vertex_edges_deform_violation(
+                            vertex_index,
+                            cur_pos,
+                            &pose,
+                            &problem.figure,
+                        );
+                        let new_deform_violation = vertex_edges_deform_violation(
+                            vertex_index,
+                            new_pos,
+                            &pose,
+                            &problem.figure,
+                        );
+                        let delta_deform_violation = new_deform_violation - cur_deform_violation;
 
-                    // Edge intersection violation.
-                    let mut new_edge_intersect_violations = Vec::new();
-                    let mut delta_intersect_violation = 0.0;
-                    for (edge_index, dst) in &problem.figure.vertex_edges[vertex_index] {
-                        let new_edge_intersect_violation =
-                            problem.edge_intersections(new_pos, pose.borrow().vertices[*dst]);
-                        new_edge_intersect_violations
-                            .push((*edge_index, new_edge_intersect_violation));
-                        delta_intersect_violation += new_edge_intersect_violation
-                            - cur_violation_state.intersect_violations[*edge_index];
-                    }
-
-                    let new_violation_summary = ViolationSummary {
-                        dislikes,
-                        vertex_violation: cur_violation_state.summary.vertex_violation
-                            + delta_vertex_violation,
-                        deform_violation: cur_violation_state.summary.deform_violation
-                            + delta_deform_violation,
-                        intersect_violations: cur_violation_state.summary.intersect_violations
-                            + delta_intersect_violation,
-                    };
-
-                    let cur_energy = cur_violation_state.summary.energy();
-                    let new_energy = new_violation_summary.energy();
-
-                    if accept_energy(cur_energy, new_energy, temperature, &mut rng) {
-                        cur_violation_state.vertex_violations[vertex_index] = vertex_violation;
-                        for (edge_index, intersect_violation) in &new_edge_intersect_violations {
-                            cur_violation_state.intersect_violations[*edge_index] =
-                                *intersect_violation;
+                        // Edge intersection violation.
+                        let mut new_edge_intersect_violations = Vec::new();
+                        let mut delta_intersect_violation = 0.0;
+                        for (edge_index, dst) in &problem.figure.vertex_edges[vertex_index] {
+                            let new_edge_intersect_violation =
+                                problem.edge_intersections(new_pos, pose.borrow().vertices[*dst]);
+                            new_edge_intersect_violations
+                                .push((*edge_index, new_edge_intersect_violation));
+                            delta_intersect_violation += new_edge_intersect_violation
+                                - cur_violation_state.intersect_violations[*edge_index];
                         }
-                        // TODO: Add edge violation recalc.
-                        cur_violation_state.summary = new_violation_summary.clone();
 
-                        // Compare it with best score.
-                        if new_energy < best_violation_summary.energy() {
-                            best_violation_summary = new_violation_summary.clone();
-                            best_pose = Rc::new((*pose).clone());
-                            s.yield_(best_pose.clone());
-                            info!("Better pose: {}", best_violation_summary);
+                        let new_violation_summary = ViolationSummary {
+                            dislikes,
+                            vertex_violation: cur_violation_state.summary.vertex_violation
+                                + delta_vertex_violation,
+                            deform_violation: cur_violation_state.summary.deform_violation
+                                + delta_deform_violation,
+                            intersect_violations: cur_violation_state.summary.intersect_violations
+                                + delta_intersect_violation,
+                        };
+
+                        let cur_energy = cur_violation_state.summary.energy();
+                        let new_energy = new_violation_summary.energy();
+
+                        if accept_energy(cur_energy, new_energy, temperature, &mut rng) {
+                            // Do a change.
+                            pose.borrow_mut().vertices[vertex_index] = new_pos;
+                            cur_violation_state.vertex_violations[vertex_index] = vertex_violation;
+                            for (edge_index, intersect_violation) in &new_edge_intersect_violations
+                            {
+                                cur_violation_state.intersect_violations[*edge_index] =
+                                    *intersect_violation;
+                            }
+                            // TODO: Add edge violation recalc.
+                            cur_violation_state.summary = new_violation_summary.clone();
+
+                            // Compare it with best score.
+                            if new_energy < best_violation_summary.energy() {
+                                best_violation_summary = new_violation_summary.clone();
+                                best_pose = Rc::new((*pose).clone());
+                                s.yield_(best_pose.clone());
+                                info!("[L] Better pose: {}", best_violation_summary);
+                            }
                         }
                     } else {
-                        pose.borrow_mut().vertices[vertex_index] = cur_pos;
+                        panic!("Illegal action {}", action);
                     }
                 }
                 info!(
