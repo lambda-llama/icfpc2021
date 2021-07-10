@@ -169,7 +169,7 @@ pub struct BonusUnlock {
 pub struct Problem {
     pub hole: Vec<Point>,
     pub poly: geo::Polygon<f64>,
-    inside_points: HashSet<Point>,
+    inside_points: Vec<Vec<bool>>,
     inside_segments: HashSet<(Point, Point)>,
     pub figure: Figure,
     pub bonuses: Vec<BonusUnlock>,
@@ -189,19 +189,20 @@ impl Problem {
         let poly = geo::Polygon::new(geo::LineString::from(border), vec![]);
 
         let (mn, mx) = bounding_box(&hole);
-        let mut inside_points = HashSet::new();
+        let mut inside_points = vec![vec![false; 101]; 101];
         let mut inside_segments = HashSet::new();
         for x in mn.x..=mx.x {
             for y in mn.y..=mx.y {
                 let p = Point { x, y };
                 if is_point_belongs_to_poly(&poly, p) {
+                    inside_points[p.x as usize][p.y as usize] = true;
                     // TODO: Currently it slows down startup of the render mode. We need to do it in a lazy way.
                     // for &q in &inside_points {
                     //     if is_segment_belongs_to_poly(&poly, (p, q)) {
                     //         inside_segments.insert((p, q));
                     //     }
                     // }
-                    inside_points.insert(p);
+                    // inside_points.insert(p);
                 }
             }
         }
@@ -290,7 +291,10 @@ impl Problem {
     }
 
     pub fn contains_point(&self, p: &Point) -> bool {
-        self.inside_points.contains(p)
+        if p.x < 0 || p.x > 100 || p.y < 0 || p.y > 100 {
+            return false;
+        }
+        self.inside_points[p.x as usize][p.y as usize]
     }
 
     pub fn contains_segment(&self, (a, b): (Point, Point)) -> bool {
