@@ -3,6 +3,7 @@ use geo::algorithm::euclidean_distance::EuclideanDistance;
 use geo::relate::Relate;
 use ordered_float::NotNan;
 use serde_derive::{Deserialize, Serialize};
+use geo::algorithm::line_intersection::{line_intersection, LineIntersection};
 
 use crate::common::*;
 
@@ -255,11 +256,36 @@ impl Problem {
 
     pub fn edge_intersections(&self, src_pos: Point, dst_pos: Point) -> f64 {
         let edge = geo::Line::new(src_pos.convert(), dst_pos.convert());
-        // TODO: Count weighted intersections with edges of polygon.
         if self.poly.contains(&edge) {
             return 0.0;
         }
-        return 1.0;
+
+        let mut intersections = 0.0;
+        for poly_line in self.poly.exterior().lines() {
+            match line_intersection(poly_line, edge) {
+                None => {},
+                Some(LineIntersection::SinglePoint { intersection, is_proper }) => {
+                    if is_proper {
+                        let int_point: geo::Point::<f64> = intersection.into();
+                        intersections += std::cmp::min(
+                            std::cmp::min(
+                                NotNan::new(int_point.euclidean_distance(&poly_line.start_point())).unwrap(),
+                                NotNan::new(int_point.euclidean_distance(&poly_line.end_point())).unwrap()),
+                            std::cmp::min(
+                                NotNan::new(int_point.euclidean_distance(&edge.start_point())).unwrap(),
+                                NotNan::new(int_point.euclidean_distance(&edge.end_point())).unwrap()),
+
+                        ).into_inner();
+                    }
+                },
+                Some(LineIntersection::Collinear { intersection }) => {
+                    if !poly_line.contains(&edge) {
+                        intersections += intersection.start_point().euclidean_distance(&intersection.end_point());
+                    }
+                },
+            }
+        }
+        return intersections;
     }
 
     pub fn bounding_box(&self) -> (Point, Point) {
