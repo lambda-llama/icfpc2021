@@ -28,6 +28,9 @@ pub fn run(
             } else {
                 u64::MAX
             };
+            if best_dislikes == 0 {
+                return Ok(());
+            }
             stdout += &format!("Problem {}\n", i);
             for &name in &solver_names {
                 let solutions_path = solutions_base_path.join(name);
