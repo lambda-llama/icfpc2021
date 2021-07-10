@@ -80,6 +80,10 @@ impl Figure {
             EdgeTestResult::TooLong
         }
     }
+
+    pub fn to_float_point(p: Point) -> geo::Point<f64>{
+        geo::Point::new(p.x as f64, p.y as f64)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
