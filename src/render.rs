@@ -14,16 +14,10 @@ use crate::problem::*;
 use crate::solver::Solver;
 use crate::transform::Transform;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Tool {
-    Move,
-}
-
 struct GuiState {
     // Coord translator
     pub translator: Translator,
 
-    pub tool: Tool,
     // Dragging
     pub dragged_point: Option<usize>,
     // Selection
@@ -63,7 +57,6 @@ impl GuiState {
 
         Ok(GuiState {
             translator,
-            tool: Tool::Move,
             dragged_point: None,
             selection_pos: None,
             selected_points: HashSet::new(),
@@ -89,21 +82,13 @@ impl GuiState {
         let problem =
             Self::load_problem_ex(&self.problems_path, (self.problems_selected + 1) as u32)?;
         self.translator = Self::create_translator(&problem);
-        self.switch_tool(Tool::Move);
-        self.selected_points.clear();
-        Ok(problem)
-    }
-
-    pub fn switch_tool(&mut self, tool: Tool) {
-        self.tool = tool;
         self.dragged_point = None;
         self.selection_pos = None;
-        if tool != Tool::Move {
-            self.selected_points.clear();
-        }
+        self.selected_points.clear();
         self.fold_points.clear();
         self.rotate_pivot = None;
         self.rotate_vertices_copy.clear();
+        Ok(problem)
     }
 
     fn create_translator(problem: &Problem) -> Translator {
@@ -189,7 +174,14 @@ fn render_gui(
 
     // Status bar
     const STATUS_BAR_HEIGHT: f32 = 25.0;
-    let text = format!("Tool: {:?}", state.tool);
+    let tool = if d.is_key_down(KeyboardKey::KEY_R) {
+        "Rotate"
+    } else if d.is_key_down(KeyboardKey::KEY_W) {
+        "Fold"
+    } else {
+        "Move"
+    };
+    let text = format!("Tool: {}", tool);
     d.gui_status_bar(
         Rectangle {
             x: 0.0,
@@ -203,7 +195,7 @@ fn render_gui(
     // Help bar
     const HELP_BAR_HEIGHT: f32 = 51.0;
     let mut text = b"\
-Tools: Q - Move, W - Center, E - Fold, R - Rotate\n\
+Tools: E - Center illegal, Shift+E - Center all, W - Fold (hold), R - Rotate (hold)\n\
 Selection: Ctrl+A - Select all, Shift adds, Ctrl removes
 Misc: S - Save, D - Step solver, F - Run solver, Ctrl+L - Reset solution\n\
 "
@@ -468,50 +460,41 @@ pub fn interact<'a>(
         if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             let mouse_p = state.untranslate(&mouse_pos);
             let v_idx = hit_test_point(&pose.borrow(), mouse_p, 2);
-            match state.tool {
-                Tool::Move => {
-                    if rh.is_key_down(KeyboardKey::KEY_R) {
-                        state.rotate_pivot = Some(mouse_p);
-                        state.rotate_vertices_copy = pose.borrow().vertices.clone();
-                    } else if rh.is_key_down(KeyboardKey::KEY_W) {
-                        if let Some(idx) = v_idx {
-                            if state.fold_points.contains(&idx) {
-                                state.fold_points.remove(&idx);
-                            } else {
-                                if state.fold_points.len() < 2 {
-                                    state.fold_points.insert(idx);
-                                } else {
-                                    let mut points =
-                                        state.fold_points.iter().cloned().collect::<Vec<_>>();
-                                    points.sort_unstable();
-                                    pose.borrow_mut().fold(
-                                        &problem.figure,
-                                        points[0],
-                                        points[1],
-                                        idx,
-                                    );
-                                    state.fold_points.clear();
-                                }
-                            }
-                        }
+            if rh.is_key_down(KeyboardKey::KEY_R) {
+                state.rotate_pivot = Some(mouse_p);
+                state.rotate_vertices_copy = pose.borrow().vertices.clone();
+            } else if rh.is_key_down(KeyboardKey::KEY_W) {
+                if let Some(idx) = v_idx {
+                    if state.fold_points.contains(&idx) {
+                        state.fold_points.remove(&idx);
                     } else {
-                        state.dragged_point = v_idx;
-                        if let Some(idx) = v_idx {
-                            if !rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT)
-                                && !rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
-                                && !state.selected_points.contains(&idx)
-                            {
-                                state.selected_points.clear();
-                            }
-                            if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) {
-                                state.selected_points.remove(&idx);
-                            } else {
-                                state.selected_points.insert(idx);
-                            }
+                        if state.fold_points.len() < 2 {
+                            state.fold_points.insert(idx);
                         } else {
-                            state.selection_pos = Some(mouse_pos);
+                            let mut points = state.fold_points.iter().cloned().collect::<Vec<_>>();
+                            points.sort_unstable();
+                            pose.borrow_mut()
+                                .fold(&problem.figure, points[0], points[1], idx);
+                            state.fold_points.clear();
                         }
                     }
+                }
+            } else {
+                state.dragged_point = v_idx;
+                if let Some(idx) = v_idx {
+                    if !rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT)
+                        && !rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
+                        && !state.selected_points.contains(&idx)
+                    {
+                        state.selected_points.clear();
+                    }
+                    if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) {
+                        state.selected_points.remove(&idx);
+                    } else {
+                        state.selected_points.insert(idx);
+                    }
+                } else {
+                    state.selection_pos = Some(mouse_pos);
                 }
             }
         }
@@ -577,7 +560,6 @@ pub fn interact<'a>(
         let mut need_to_sleep = true;
         if let Some(key) = rh.get_key_pressed() {
             match key {
-                KeyboardKey::KEY_Q => state.switch_tool(Tool::Move),
                 KeyboardKey::KEY_E => {
                     let points = if rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT) {
                         state.selected_points.iter().cloned().collect::<Vec<_>>()
@@ -610,10 +592,7 @@ pub fn interact<'a>(
                             .center(&problem.figure, idx, problem.bounding_box());
                     }
                 }
-                KeyboardKey::KEY_A
-                    if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
-                        && state.tool == Tool::Move =>
-                {
+                KeyboardKey::KEY_A if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) => {
                     for idx in 0..problem.figure.vertices.len() {
                         state.selected_points.insert(idx);
                     }
