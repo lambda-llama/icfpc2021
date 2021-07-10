@@ -1,8 +1,10 @@
 use clap::App;
 use clap::Arg;
+use log::LevelFilter;
 use problem::Pose;
 use problem::Problem;
 use render::interact;
+use simplelog::{ColorChoice, Config, TerminalMode};
 
 #[macro_use]
 extern crate generator;
@@ -20,6 +22,12 @@ use crate::common::*;
 
 fn main() -> Result<()> {
     let app = App::new("icfpc2021")
+        .arg(
+            Arg::new("VERBOSE")
+                .short('v')
+                .takes_value(false)
+                .multiple_occurrences(true),
+        )
         // Run one solver on one problem
         .subcommand(
             App::new("run")
@@ -57,7 +65,23 @@ fn main() -> Result<()> {
         )
         .subcommand(App::new("stats").arg("<INPUT> path/to/problems"));
 
-    match app.get_matches().subcommand() {
+    let app_matches = app.get_matches();
+
+    let filter = match app_matches.occurrences_of("VERBOSE") {
+        0 => LevelFilter::Warn,
+        1 => LevelFilter::Info,
+        2 => LevelFilter::Debug,
+        3 => LevelFilter::Trace,
+        _ => panic!("No verbosity levels beyond -vvv"),
+    };
+    simplelog::TermLogger::init(
+        filter,
+        Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )?;
+
+    match app_matches.subcommand() {
         Some(("run", matches)) => {
             let problem = matches.value_of("INPUT").unwrap();
             let data = std::fs::read(&problem)?;

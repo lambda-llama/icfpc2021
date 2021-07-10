@@ -1,3 +1,5 @@
+pub use log::{debug, error, info, trace, warn};
+
 pub type Result<T> = std::result::Result<T, anyhow::Error>;
 
 pub trait PointConversion<To> {

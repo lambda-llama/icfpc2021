@@ -176,13 +176,13 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
                 KeyboardKey::KEY_S => {
                     const PATH: &'static str = "./current.solution";
                     std::fs::write(PATH, pose.borrow().to_json()?)?;
-                    println!("Saved to {}", PATH);
+                    info!("Saved to {}", PATH);
                 }
                 KeyboardKey::KEY_D => {
                     if gen.resume().is_some() {
                         need_to_sleep = false;
                     } else {
-                        println!("WARNING: No more steps in the solver");
+                        warn!("No more steps in the solver");
                     }
                 }
                 _ => {}
@@ -193,7 +193,7 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
             if gen.resume().is_some() {
                 need_to_sleep = false;
             } else {
-                println!("WARNING: No more steps in the solver");
+                warn!("No more steps in the solver");
             }
         }
 

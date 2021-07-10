@@ -1,10 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
-
 use geo::relate::Relate;
 use geomath::prelude::coordinates::Polar;
 
-use crate::{common::PointConversion, problem::*};
+use crate::common::*;
+use crate::problem::*;
 
 use super::Solver;
 
@@ -34,14 +34,14 @@ impl Solver for WaveSolver {
             let mut direction_to_center = true;
 
             for _iterations in 0..1000 {
-                println!("Direction to center: {}", direction_to_center);
+                info!("Direction to center: {}", direction_to_center);
                 if problem.validate(&pose.borrow()) {
                     break;
                 }
 
                 for idx in 0..problem.figure.edges.len() {
                     if !problem.figure.test_edge_len2(idx, &pose.borrow()) {
-                        println!("Illegal edge {}", idx);
+                        info!("Illegal edge {}", idx);
 
                         let e = &problem.figure.edges[idx];
                         let len0 = Figure::distance_squared(pose.borrow().vertices[e.v0], center);
@@ -96,7 +96,7 @@ impl Solver for WaveSolver {
                                 }
                             }
                         }
-                        println!("Setting new vertex position for {}", dyn_idx);
+                        info!("Setting new vertex position for {}", dyn_idx);
                         pose.borrow_mut().vertices[dyn_idx] = best_vertex;
                         s.yield_(pose.clone());
                     }

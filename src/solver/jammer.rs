@@ -2,7 +2,8 @@ use std::{cell::RefCell, rc::Rc};
 
 use geo::relate::Relate;
 
-use crate::{common::PointConversion, problem::*};
+use crate::common::*;
+use crate::problem::*;
 
 use super::Solver;
 
@@ -36,7 +37,7 @@ impl Solver for JammerSolver {
                 let mut rel = problem.poly.relate(&p);
                 if !(rel.is_within() || rel.is_intersects()) {
                     while !(rel.is_within() || rel.is_intersects()) {
-                        println!("{:?}", p);
+                        info!("{:?}", p);
                         if (p.x() - center.x()).abs() < (p.y() - center.y()).abs() {
                             if p.y() > center.y() {
                                 p.set_y(p.y() - 1.0);

@@ -1,6 +1,7 @@
 use std::fmt::{self, Display, Formatter};
 use std::{cell::RefCell, rc::Rc};
 
+use crate::common::*;
 use crate::problem::{Figure, Point, Pose, Problem};
 use rand::rngs::StdRng;
 use rand::Rng;
@@ -81,7 +82,7 @@ impl Solver for AnnealingSolver {
 
             let mut temperature = START_T;
 
-            println!(
+            info!(
                 "temp: {:.5}, cur_summary: {}",
                 temperature, cur_violation_state.summary,
             );
@@ -156,11 +157,12 @@ impl Solver for AnnealingSolver {
                             best_violation_summary = new_violation_summary.clone();
                             best_pose = pose.clone();
                             s.yield_(pose.clone());
-                            println!("Better pose: {}", best_violation_summary);
+                            info!("Better pose: {}", best_violation_summary);
                         }
                         cur_violation_state.vertex_violations[vertex_index] = vertex_violation;
                         for (edge_index, intersect_violation) in &new_edge_intersect_violations {
-                            cur_violation_state.intersect_violations[*edge_index] = *intersect_violation;
+                            cur_violation_state.intersect_violations[*edge_index] =
+                                *intersect_violation;
                         }
                         // TODO: Add edge violation recalc.
                         cur_violation_state.summary = new_violation_summary.clone();
@@ -168,7 +170,7 @@ impl Solver for AnnealingSolver {
                         pose.borrow_mut().vertices[vertex_index] = cur_pos;
                     }
                 }
-                println!(
+                info!(
                     "temp: {:.5}, cur_summary: {}, best_summary: {}",
                     temperature, cur_violation_state.summary, best_violation_summary,
                 );
