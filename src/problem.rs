@@ -191,8 +191,8 @@ impl Problem {
         let (mn, mx) = bounding_box(&hole);
         let mut inside_points = HashSet::new();
         let mut inside_segments = HashSet::new();
-        for x in mn.x..mx.x + 1 {
-            for y in mn.y..mx.y + 1 {
+        for x in mn.x..=mx.x {
+            for y in mn.y..=mx.y {
                 let p = Point { x, y };
                 if is_point_belongs_to_poly(&poly, p) {
                     // TODO: Currently it slows down startup of the render mode. We need to do it in a lazy way.

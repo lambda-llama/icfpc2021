@@ -37,6 +37,7 @@ impl Solver for TreeSearchSolver {
 
             let mut runner = SearchRunner {
                 order,
+                placed: vec![false; figure_size],
                 parents,
                 pose: pose.borrow().clone(),
                 best_dislikes: None,
@@ -45,12 +46,15 @@ impl Solver for TreeSearchSolver {
 
             // Do initial placing in coordinates.
             // TODO: Use only internal coordinates here in the future.
-            let bbox = problem.bounding_box();
+            let (mn, mx) = problem.bounding_box();
             {
-                for x in bbox.0.x..=bbox.1.x {
-                    for y in bbox.0.y..=bbox.1.y {
-                        debug!("Placed vertex 0 in ({}, {})", x, y);
+                for x in mn.x..=mx.x {
+                    for y in mn.y..=mx.y {
                         runner.pose.vertices[0] = Point { x, y };
+                        if !problem.contains_point(&runner.pose.vertices[runner.order[0]]) {
+                            continue;
+                        }
+                        debug!("Placed vertex 0 in ({}, {})", x, y);
                         runner.place_vertices(1, &problem);
                     }
                 }
@@ -96,6 +100,7 @@ fn topsort(
 struct SearchRunner<'a> {
     // Whether vertex is already placed.
     order: Vec<usize>,
+    placed: Vec<bool>,
     // Parent of the vertex in topsort order.
     parents: Vec<(usize, usize)>,
     pose: Pose,
@@ -106,7 +111,7 @@ struct SearchRunner<'a> {
 // TODO: Precalc this.
 fn get_deltas(distance: i64) -> Vec<(i64, i64)> {
     let mut deltas = Vec::new();
-    for dx in 0..distance {
+    for dx in 0..=distance {
         if dx * dx > distance {
             break;
         }
@@ -132,7 +137,7 @@ fn get_deltas(distance: i64) -> Vec<(i64, i64)> {
 
 impl<'a> SearchRunner<'a> {
     fn place_vertices(&mut self, index: usize, problem: &Problem) -> Option<u64> {
-        debug!("place_vertex {}", index);
+        debug!("Placing vertex {}", index);
         if index == problem.figure.vertices.len() {
             let dislikes = problem.dislikes(&self.pose);
 
@@ -145,6 +150,7 @@ impl<'a> SearchRunner<'a> {
         }
 
         let v = self.order[index];
+        self.placed[v] = true;
         let (parent, parent_edge_index) = self.parents[v];
         let parent_pos = self.pose.vertices[parent];
         let mut best_result = None;
@@ -156,26 +162,33 @@ impl<'a> SearchRunner<'a> {
             for (dx, dy) in get_deltas(parent_d) {
                 // Place vertex `v`.
                 // We attach it to one of the previously placed vertices.
-                self.pose.vertices[index] = Point {
+                self.pose.vertices[v] = Point {
                     x: parent_pos.x + dx,
                     y: parent_pos.y + dy,
                 };
-                if self.pose.vertices[index].x < 0 || self.pose.vertices[index].y < 0 {
+                if self.pose.vertices[v].x < 0 || self.pose.vertices[v].y < 0 {
+                    continue;
+                }
+                if !problem.contains_point(&self.pose.vertices[v]) {
                     continue;
                 }
 
+                if index == 0 && parent_pos.x == 56 && parent_pos.y == 4 {
+                    info!(
+                        "Placed {},{} in ({}, {}), delta: ({}, {})",
+                        v, index, self.pose.vertices[v].x, self.pose.vertices[v].y, dx, dy
+                    );
+                }
                 debug!(
                     "Placed {},{} in ({}, {}), delta: ({}, {})",
-                    v, index, self.pose.vertices[index].x, self.pose.vertices[index].y, dx, dy
+                    v, index, self.pose.vertices[v].x, self.pose.vertices[v].y, dx, dy
                 );
-
-                // TODO: Check that placement is within hole.
 
                 // Validate that the placement is not breaking any edges.
                 // TODO: Only traverse already placed vertices.
                 let mut has_violations = false;
                 for &(e_id, dst) in problem.figure.vertex_edges[v].iter() {
-                    if dst <= index {
+                    if self.placed[dst] {
                         let d = Figure::distance_squared_int(
                             self.pose.vertices[v],
                             self.pose.vertices[dst],
@@ -207,6 +220,7 @@ impl<'a> SearchRunner<'a> {
                 }
             }
         }
+        self.placed[v] = false;
         return best_result;
     }
 }
