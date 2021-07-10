@@ -76,17 +76,17 @@ impl Solver for AnnealingSolver {
             let mut temperature = START_T;
 
             println!(
-                "temp: {}, cur_summary: {}",
-                START_T, cur_violation_state.summary,
+                "temp: {:.5}, cur_summary: {}",
+                temperature, cur_violation_state.summary,
             );
             while temperature > END_T {
                 let step_size = 1;
                 for inner_it in 0..INNER_IT {
                     // Compute change to pose.
                     // let vertex_index: usize =
-                    //     rand::random::<usize>() % pose.borrow().vertices.len();
+                    //     rng.gen::<usize>() % pose.borrow().vertices.len();
                     let vertex_index: usize = inner_it % pose.borrow().vertices.len();
-                    let direction: usize = rand::random::<usize>() % 4;
+                    let direction: usize = rng.gen::<usize>() % 4;
                     let prev_pos = pose.borrow().vertices[vertex_index];
                     let new_pos = Point {
                         x: prev_pos.x + step_size * DX[direction],
@@ -137,7 +137,7 @@ impl Solver for AnnealingSolver {
                     }
                 }
                 println!(
-                    "temp: {}, cur_summary: {}, best_summary: {}",
+                    "temp: {:.5}, cur_summary: {}, best_summary: {}",
                     temperature, cur_violation_state.summary, best_violation_summary,
                 );
                 // s.yield_(pose.clone());
