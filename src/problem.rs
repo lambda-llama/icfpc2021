@@ -23,6 +23,13 @@ pub struct Figure {
     pub epsilon: f64,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EdgeTestResult {
+    Ok,
+    TooShort,
+    TooLong,
+}
+
 impl Figure {
     pub fn new(vertices: Vec<Point>, edges: Vec<Edge>, epsilon: f64) -> Self {
         let mut vertex_edges = vec![Vec::new(); vertices.len()];
@@ -59,17 +66,18 @@ impl Figure {
     }
 
     pub fn edge_len2_diff(&self, idx: usize, pose: &Pose) -> f64 {
-        (self.edge_len2(idx, pose) - self.edges[idx].len2).abs()
+        self.edge_len2(idx, pose) - self.edges[idx].len2
     }
 
-    // TODO: bool => enum (ok, close to bad, bad)
-    pub fn test_edge_len2(&self, idx: usize, pose: &Pose) -> bool {
+    pub fn test_edge_len2(&self, idx: usize, pose: &Pose) -> EdgeTestResult {
         let diff = self.edge_len2_diff(idx, pose);
         let allowed = self.epsilon * self.edges[idx].len2;
-        if diff <= allowed {
-            true
+        if diff.abs() <= allowed {
+            EdgeTestResult::Ok
+        } else if diff < 0.0 {
+            EdgeTestResult::TooShort
         } else {
-            false
+            EdgeTestResult::TooLong
         }
     }
 }
@@ -212,7 +220,7 @@ impl Problem {
         }
         // 3 - edges are of correct length
         for idx in 0..self.figure.edges.len() {
-            if !self.figure.test_edge_len2(idx, pose) {
+            if self.figure.test_edge_len2(idx, pose) != EdgeTestResult::Ok {
                 return false;
             }
         }

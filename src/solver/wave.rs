@@ -40,7 +40,7 @@ impl Solver for WaveSolver {
                 }
 
                 for idx in 0..problem.figure.edges.len() {
-                    if !problem.figure.test_edge_len2(idx, &pose.borrow()) {
+                    if problem.figure.test_edge_len2(idx, &pose.borrow()) != EdgeTestResult::Ok {
                         info!("Illegal edge {}", idx);
 
                         let e = &problem.figure.edges[idx];
@@ -114,7 +114,7 @@ impl Solver for WaveSolver {
 fn sum_of_diffs(problem: &Problem, idx: usize, pose: &Pose) -> f64 {
     let mut sum = 0.0f64;
     for (e_idx, _) in &problem.figure.vertex_edges[idx] {
-        sum += problem.figure.edge_len2_diff(*e_idx, pose);
+        sum += problem.figure.edge_len2_diff(*e_idx, pose).abs();
     }
     sum
 }

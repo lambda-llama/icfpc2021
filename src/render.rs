@@ -6,7 +6,7 @@ use ordered_float::NotNan;
 use raylib::prelude::*;
 
 use crate::common::*;
-use crate::problem::{Figure, Point, Pose, Problem};
+use crate::problem::*;
 use crate::solver::Solver;
 
 struct Translator {
@@ -56,7 +56,8 @@ fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, p
     const COLOR_HOLE: Color = Color::BLACK;
     const COLOR_VERTEX: Color = Color::DARKGREEN;
     const COLOR_EDGE_OK: Color = Color::GREEN;
-    const COLOR_EDGE_BAD: Color = Color::RED;
+    const COLOR_EDGE_TOO_SHORT: Color = Color::BLUE;
+    const COLOR_EDGE_TOO_LONG: Color = Color::RED;
 
     for x in t.zero.x..t.max.x {
         for y in t.zero.y..t.max.y {
@@ -85,8 +86,9 @@ fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, p
             t.translate(&pose.vertices[e.v1 as usize]),
             LINE_THICKNESS_EDGE,
             match problem.figure.test_edge_len2(idx, pose) {
-                true => COLOR_EDGE_OK,
-                false => COLOR_EDGE_BAD,
+                EdgeTestResult::Ok => COLOR_EDGE_OK,
+                EdgeTestResult::TooShort => COLOR_EDGE_TOO_SHORT,
+                EdgeTestResult::TooLong => COLOR_EDGE_TOO_LONG,
             },
         );
     }
