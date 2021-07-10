@@ -164,10 +164,11 @@ fn render_gui(
     d.set_window_title(
         &thread,
         &format!(
-            "eps: {}; dlike_score: {}; inside: {}",
+            "eps: {}; dlike_score: {}; inside: {}, edges ok: {}",
             problem.figure.epsilon,
             problem.dislikes(pose),
             problem.contains(pose),
+            problem.correct_length(pose)
         ),
     );
 
