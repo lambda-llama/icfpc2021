@@ -55,7 +55,12 @@ impl Solver for TreeSearchSolver {
                             continue;
                         }
                         debug!("Placed vertex 0 in ({}, {})", x, y);
-                        runner.place_vertices(1, &problem);
+                        let result = runner.place_vertices(1, &problem);
+                        if result.is_some() {
+                            if result.unwrap() == 0 {
+                                done!();
+                            }
+                        }
                     }
                 }
             }
@@ -211,10 +216,16 @@ impl<'a> SearchRunner<'a> {
                         Some(best_dislikes) => {
                             if best_dislikes > new_dislikes {
                                 best_result = Some(new_dislikes);
+                                if new_dislikes == 0 {
+                                    return best_result;
+                                }
                             }
                         }
                         None => {
                             best_result = Some(new_dislikes);
+                            if new_dislikes == 0 {
+                                return best_result;
+                            }
                         }
                     }
                 }
