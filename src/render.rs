@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::ffi::CStr;
+use std::ffi::CString;
 use std::rc::Rc;
 use std::{thread, time};
 
@@ -9,6 +9,17 @@ use raylib::prelude::*;
 use crate::common::*;
 use crate::problem::*;
 use crate::solver::Solver;
+use crate::transform::Transform;
+
+#[derive(Debug)]
+enum Tool {
+    Move,
+    Center,
+}
+
+struct GuiState {
+    pub tool: Tool,
+}
 
 struct Translator {
     x_offset: f32,
@@ -49,7 +60,13 @@ impl Translator {
     }
 }
 
-fn render_gui(d: &mut RaylibDrawHandle, thread: &RaylibThread, problem: &Problem, pose: &Pose) {
+fn render_gui(
+    d: &mut RaylibDrawHandle,
+    thread: &RaylibThread,
+    state: &GuiState,
+    problem: &Problem,
+    pose: &Pose,
+) {
     // Window title
     d.set_window_title(
         &thread,
@@ -62,6 +79,7 @@ fn render_gui(d: &mut RaylibDrawHandle, thread: &RaylibThread, problem: &Problem
     );
 
     // Status bar
+    let text = format!("Tool: {:?}", state.tool);
     d.gui_status_bar(
         Rectangle {
             x: 0.0,
@@ -69,7 +87,21 @@ fn render_gui(d: &mut RaylibDrawHandle, thread: &RaylibThread, problem: &Problem
             width: d.get_screen_width() as f32,
             height: 25.0,
         },
-        Some(CStr::from_bytes_with_nul(b"TEST\0").unwrap()),
+        Some(&CString::new(text).unwrap()),
+    );
+
+    // Help bar
+    let mut text =
+        b"Tools: Q - Move, W - Center\nMisc: S - Save, D - Step solver, F - Run solver".to_owned();
+    d.gui_text_box_multi(
+        Rectangle {
+            x: 0.0,
+            y: d.get_screen_height() as f32 - 34.0,
+            width: d.get_screen_width() as f32,
+            height: 34.0,
+        },
+        &mut text,
+        false,
     );
 }
 
@@ -181,17 +213,29 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
     let mut gen = solver.solve_gen(&problem, Rc::new(RefCell::new(pose)));
     let pose = gen.resume().unwrap();
 
+    let mut state = GuiState { tool: Tool::Move };
+
     while !rh.window_should_close() {
         {
             let mut d = rh.begin_drawing(&thread);
             d.clear_background(Color::WHITE);
-            render_gui(&mut d, &thread, &problem, &pose.borrow());
+            render_gui(&mut d, &thread, &state, &problem, &pose.borrow());
             render_problem(&mut d, &t, &problem, &pose.borrow());
         }
 
         if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             let mouse_pos = t.untranslate(&rh.get_mouse_position());
-            dragged_point = hit_test(&pose.borrow(), mouse_pos, 2);
+            let v_idx = hit_test(&pose.borrow(), mouse_pos, 2);
+            match state.tool {
+                Tool::Move => {
+                    dragged_point = v_idx;
+                }
+                Tool::Center => {
+                    if let Some(idx) = v_idx {
+                        pose.borrow_mut().center(&problem.figure, idx);
+                    }
+                }
+            }
         }
 
         if rh.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON) {
@@ -208,6 +252,8 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
         let mut need_to_sleep = true;
         if let Some(key) = rh.get_key_pressed() {
             match key {
+                KeyboardKey::KEY_Q => state.tool = Tool::Move,
+                KeyboardKey::KEY_W => state.tool = Tool::Center,
                 KeyboardKey::KEY_S => {
                     const PATH: &'static str = "./current.solution";
                     std::fs::write(PATH, pose.borrow().to_json()?)?;
