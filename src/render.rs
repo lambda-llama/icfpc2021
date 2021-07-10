@@ -12,10 +12,11 @@ use crate::problem::*;
 use crate::solver::Solver;
 use crate::transform::Transform;
 
-#[derive(Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Tool {
     Move,
     Center,
+    Fold,
 }
 
 struct GuiState {
@@ -23,6 +24,17 @@ struct GuiState {
     pub dragged_point: Option<usize>,
     pub selection_pos: Option<Vector2>,
     pub selected_points: HashSet<usize>,
+    pub fold_points: HashSet<usize>,
+}
+
+impl GuiState {
+    pub fn switch_tool(&mut self, tool: Tool) {
+        self.tool = tool;
+        self.dragged_point = None;
+        self.selection_pos = None;
+        self.selected_points.clear();
+        self.fold_points.clear();
+    }
 }
 
 struct Translator {
@@ -224,7 +236,7 @@ fn render_problem(
 
     // Vertices
     for (idx, p) in pose.vertices.iter().enumerate() {
-        let color = if state.selected_points.contains(&idx) {
+        let color = if state.selected_points.contains(&idx) || state.fold_points.contains(&idx) {
             COLOR_VERTEX_SELECTED
         } else {
             COLOR_VERTEX
@@ -289,6 +301,7 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
         dragged_point: None,
         selection_pos: None,
         selected_points: HashSet::new(),
+        fold_points: HashSet::new(),
     };
 
     while !rh.window_should_close() {
@@ -326,6 +339,24 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
                 Tool::Center => {
                     if let Some(idx) = v_idx {
                         pose.borrow_mut().center(&problem.figure, idx);
+                    }
+                }
+                Tool::Fold => {
+                    if let Some(idx) = v_idx {
+                        if state.fold_points.contains(&idx) {
+                            state.fold_points.remove(&idx);
+                        } else {
+                            if state.fold_points.len() < 2 {
+                                state.fold_points.insert(idx);
+                            } else {
+                                let mut points =
+                                    state.fold_points.iter().cloned().collect::<Vec<_>>();
+                                points.sort_unstable();
+                                pose.borrow_mut()
+                                    .fold(&problem.figure, points[0], points[1], idx);
+                                state.fold_points.clear();
+                            }
+                        }
                     }
                 }
             }
@@ -376,9 +407,13 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
         let mut need_to_sleep = true;
         if let Some(key) = rh.get_key_pressed() {
             match key {
-                KeyboardKey::KEY_Q => state.tool = Tool::Move,
-                KeyboardKey::KEY_W => state.tool = Tool::Center,
-                KeyboardKey::KEY_A if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) => {
+                KeyboardKey::KEY_Q => state.switch_tool(Tool::Move),
+                KeyboardKey::KEY_W => state.switch_tool(Tool::Center),
+                KeyboardKey::KEY_E => state.switch_tool(Tool::Fold),
+                KeyboardKey::KEY_A
+                    if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
+                        && state.tool == Tool::Move =>
+                {
                     for idx in 0..problem.figure.vertices.len() {
                         state.selected_points.insert(idx);
                     }

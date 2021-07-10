@@ -92,8 +92,8 @@ impl Solver for AnnealingSolver {
             );
 
             let weights = [
-                1, // Global move.
-                1000,    // Local move.
+                1,    // Global move.
+                1000, // Local move.
             ];
             let dist = WeightedIndex::new(&weights).unwrap();
 
