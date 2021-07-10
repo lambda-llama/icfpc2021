@@ -503,19 +503,21 @@ pub fn interact<'a>(
         } else if rh.is_mouse_button_pressed(MouseButton::MOUSE_RIGHT_BUTTON) {
             state.viewport_drag_point = Some(mouse_pos);
         } else {
-            let scroll = rh.get_mouse_wheel_move();
-            let scroll_amount = 0.95;
-            if scroll.abs() > 0.5 {
-                if scroll > 0.0 {
-                    let offset = 2.0 * state.translator.step / scroll_amount;
-                    state.translator.x_offset -= offset;
-                    state.translator.y_offset -= offset;
-                    state.translator.step /= scroll_amount;
-                } else {
-                    let offset = 2.0 * state.translator.step * scroll_amount;
-                    state.translator.x_offset += offset;
-                    state.translator.y_offset += offset;
-                    state.translator.step *= scroll_amount;
+            if mouse_pos.x < (rh.get_screen_width() as f32 - 50.0) {
+                let scroll = rh.get_mouse_wheel_move();
+                let scroll_amount = 0.95;
+                if scroll.abs() > 0.5 {
+                    if scroll > 0.0 {
+                        let offset = 2.0 * state.translator.step / scroll_amount;
+                        state.translator.x_offset -= offset;
+                        state.translator.y_offset -= offset;
+                        state.translator.step /= scroll_amount;
+                    } else {
+                        let offset = 2.0 * state.translator.step * scroll_amount;
+                        state.translator.x_offset += offset;
+                        state.translator.y_offset += offset;
+                        state.translator.step *= scroll_amount;
+                    }
                 }
             }
         }
