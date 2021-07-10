@@ -23,7 +23,7 @@ pub struct AnnealingSolver {}
 pub struct ViolationSummary {
     dislikes: u64,
     vertex_violation: f64,
-    edge_violation: f64,
+    deform_violation: f64,
 }
 
 impl Display for ViolationSummary {
@@ -33,10 +33,10 @@ impl Display for ViolationSummary {
         // into a buffer (the first argument)
         write!(
             f,
-            "(d: {}, vertex_v: {:.3}, edge_v: {:.3}, energy: {:.3})",
+            "(d: {}, vertex_v: {:.3}, deform: {:.3}, energy: {:.3})",
             self.dislikes,
             self.vertex_violation,
-            self.edge_violation,
+            self.deform_violation,
             self.energy()
         )
     }
@@ -45,12 +45,12 @@ impl Display for ViolationSummary {
 pub struct ViolationState {
     summary: ViolationSummary,
     vertex_violations: Vec<f64>,
-    edge_violations: Vec<f64>,
+    deform_violations: Vec<f64>,
 }
 
 impl ViolationSummary {
     fn energy(&self) -> f64 {
-        self.dislikes as f64 + 100.0 * self.vertex_violation + 100.0 * self.edge_violation
+        self.dislikes as f64 + 100.0 * self.vertex_violation + 100.0 * self.deform_violation
     }
 }
 
@@ -82,37 +82,46 @@ impl Solver for AnnealingSolver {
             while temperature > END_T {
                 let step_size = 1;
                 for inner_it in 0..INNER_IT {
-                    // Compute change to pose.
+                    // Choose a random change to pos.
                     // let vertex_index: usize =
                     //     rng.gen::<usize>() % pose.borrow().vertices.len();
                     let vertex_index: usize = inner_it % pose.borrow().vertices.len();
                     let direction: usize = rng.gen::<usize>() % 4;
-                    let prev_pos = pose.borrow().vertices[vertex_index];
+                    let cur_pos = pose.borrow().vertices[vertex_index];
                     let new_pos = Point {
-                        x: prev_pos.x + step_size * DX[direction],
-                        y: prev_pos.y + step_size * DY[direction],
+                        x: cur_pos.x + step_size * DX[direction],
+                        y: cur_pos.y + step_size * DY[direction],
                     };
 
                     // Compute score here.
                     // TODO: Migrate to delta-recompute here.
                     let dislikes = problem.dislikes(&pose.borrow());
                     // Vertex violation.
-                    let vertex_distance = problem.min_distance_to(new_pos);
-                    let delta_distance =
-                        vertex_distance - cur_violation_state.vertex_violations[vertex_index];
+                    let vertex_violation = problem.min_distance_to(new_pos);
+                    let delta_vertex_violation =
+                        vertex_violation - cur_violation_state.vertex_violations[vertex_index];
                     // Edge deformation violation.
-                    let prev_edge_violation =
-                        edges_violation_after_move(vertex_index, prev_pos, &pose, &problem.figure);
-                    let new_edge_violation =
-                        edges_violation_after_move(vertex_index, new_pos, &pose, &problem.figure);
-                    let delta_violation = new_edge_violation - prev_edge_violation;
+                    // TODO: Take the previous violation from map.
+                    let cur_deform_violation = vertex_edges_deform_violation(
+                        vertex_index,
+                        cur_pos,
+                        &pose,
+                        &problem.figure,
+                    );
+                    let new_deform_violation = vertex_edges_deform_violation(
+                        vertex_index,
+                        new_pos,
+                        &pose,
+                        &problem.figure,
+                    );
+                    let delta_deform_violation = new_deform_violation - cur_deform_violation;
 
                     let new_violation_summary = ViolationSummary {
                         dislikes,
                         vertex_violation: cur_violation_state.summary.vertex_violation
-                            + delta_distance,
-                        edge_violation: cur_violation_state.summary.edge_violation
-                            + delta_violation,
+                            + delta_vertex_violation,
+                        deform_violation: cur_violation_state.summary.deform_violation
+                            + delta_deform_violation,
                     };
 
                     pose.borrow_mut().vertices[vertex_index] = new_pos;
@@ -129,11 +138,11 @@ impl Solver for AnnealingSolver {
                             s.yield_(pose.clone());
                             println!("Better pose: {}", best_violation_summary);
                         }
-                        cur_violation_state.vertex_violations[vertex_index] = vertex_distance;
+                        cur_violation_state.vertex_violations[vertex_index] = vertex_violation;
                         // TODO: Add edge violation recalc.
                         cur_violation_state.summary = new_violation_summary.clone();
                     } else {
-                        pose.borrow_mut().vertices[vertex_index] = prev_pos;
+                        pose.borrow_mut().vertices[vertex_index] = cur_pos;
                     }
                 }
                 println!(
@@ -153,28 +162,31 @@ fn accept_energy(prev_energy: f64, new_energy: f64, temperature: f64, rng: &mut 
     return ((prev_energy - new_energy) / temperature).exp() > rng.gen();
 }
 
-fn edges_violation_after_move(
+fn vertex_edges_deform_violation(
     vertex_index: usize,
-    new_position: Point,
+    vertex_position: Point,
     pose: &Rc<RefCell<Pose>>,
     figure: &Figure,
 ) -> f64 {
     let mut total_violation = 0.0;
     for (edge_index, dst) in &figure.vertex_edges[vertex_index] {
-        total_violation +=
-            edge_violation_after_move(new_position, *edge_index, *dst, &pose.borrow(), figure);
+        total_violation += edge_deform_violation(
+            *edge_index,
+            vertex_position,
+            pose.borrow().vertices[*dst],
+            figure,
+        );
     }
     return total_violation;
 }
 
-fn edge_violation_after_move(
-    new_position: Point,
+fn edge_deform_violation(
     edge_index: usize,
-    dst: usize,
-    pose: &Pose,
+    src_pos: Point,
+    dst_pos: Point,
     figure: &Figure,
 ) -> f64 {
-    let new_distance = Figure::distance_squared(new_position, pose.vertices[dst]);
+    let new_distance = Figure::distance_squared(src_pos, dst_pos);
     let bounds = figure.edge_len2_bounds(edge_index);
     if new_distance < bounds.0 {
         return bounds.0 - new_distance;
@@ -206,29 +218,33 @@ fn compute_violation_state(pose: &Pose, problem: &Problem) -> ViolationState {
     let cur_dislikes = problem.dislikes(&pose);
 
     // Vertex violation - how fast all vertices are from the internals of the hole.
-    let mut total_vertex_distance = 0.0;
-    let mut vertex_distances = vec![0.0; pose.vertices.len()];
-    for (i, vertex) in pose.vertices.iter().enumerate() {
-        vertex_distances[i] = problem.min_distance_to(*vertex);
-        total_vertex_distance += vertex_distances[i];
+    let mut total_vertex_violation = 0.0;
+    let mut vertex_violations = vec![0.0; pose.vertices.len()];
+    for (v_index, vertex) in pose.vertices.iter().enumerate() {
+        vertex_violations[v_index] = problem.min_distance_to(*vertex);
+        total_vertex_violation += vertex_violations[v_index];
     }
 
     // Edge deformation violation - how much are we violating deformation constraints.
-    let mut edge_violation = vec![0.0; problem.figure.edges.len()];
-    let mut total_edge_violation = 0.0;
-    for (i, edge) in problem.figure.edges.iter().enumerate() {
-        edge_violation[i] =
-            edge_violation_after_move(pose.vertices[edge.v0], i, edge.v1, &pose, &problem.figure);
-        total_edge_violation += edge_violation[i]
+    let mut deform_violations = vec![0.0; problem.figure.edges.len()];
+    let mut total_deform_violation = 0.0;
+    for (e_index, edge) in problem.figure.edges.iter().enumerate() {
+        deform_violations[e_index] = edge_deform_violation(
+            e_index,
+            pose.vertices[edge.v0],
+            pose.vertices[edge.v1],
+            &problem.figure,
+        );
+        total_deform_violation += deform_violations[e_index]
     }
 
     return ViolationState {
         summary: ViolationSummary {
             dislikes: cur_dislikes,
-            vertex_violation: total_vertex_distance,
-            edge_violation: total_edge_violation,
+            vertex_violation: total_vertex_violation,
+            deform_violation: total_deform_violation,
         },
-        vertex_violations: vertex_distances,
-        edge_violations: edge_violation,
+        vertex_violations,
+        deform_violations,
     };
 }
