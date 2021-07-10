@@ -20,15 +20,13 @@ impl Solver for TreeSearchSolver {
 
             let figure_size = problem.figure.vertices.len();
 
-            // TODO: Use only internal coordinates here in the future.
-            let bbox = problem.bounding_box();
-
             let mut order = Vec::new();
-            let mut parents = Vec::new();
+            let mut parents = vec![(0, 0); figure_size];
             {
                 let mut visited = vec![false; figure_size];
                 topsort(
                     0,
+                    None,
                     None,
                     &mut order,
                     &mut visited,
@@ -41,14 +39,21 @@ impl Solver for TreeSearchSolver {
                 order,
                 parents,
                 pose: pose.borrow().clone(),
+                best_dislikes: None,
                 scope: s,
             };
 
+            // Do initial placing in coordinates.
+            // TODO: Use only internal coordinates here in the future.
+            let bbox = problem.bounding_box();
             {
-                // TODO: Iterate over possible places.
-                // Do initial placing in coordinates.
-                runner.pose.vertices[0] = Point { x: 0, y: 0 };
-                runner.place_vertices(1, &problem);
+                for x in bbox.0.x..=bbox.1.x {
+                    for y in bbox.0.y..=bbox.1.y {
+                        debug!("Placed vertex 0 in ({}, {})", x, y);
+                        runner.pose.vertices[0] = Point { x, y };
+                        runner.place_vertices(1, &problem);
+                    }
+                }
             }
 
             done!();
@@ -59,23 +64,32 @@ impl Solver for TreeSearchSolver {
 fn topsort(
     v: usize,
     p: Option<usize>,
+    p_edge_index: Option<usize>,
     order: &mut Vec<usize>,
     visited: &mut Vec<bool>,
-    parents: &mut Vec<usize>,
+    parents: &mut Vec<(usize, usize)>,
     edges: &Vec<Vec<(usize, usize)>>,
 ) {
     visited[v] = true;
     if p.is_some() {
-        parents[v] = p.unwrap();
+        parents[v] = (p.unwrap(), p_edge_index.unwrap());
     }
 
     order.push(v);
-    for &(_, dst) in &edges[v] {
+    for &(edge_index, dst) in &edges[v] {
         if visited[dst] {
             continue;
         }
 
-        topsort(dst, Some(v), order, visited, parents, &edges);
+        topsort(
+            dst,
+            Some(v),
+            Some(edge_index),
+            order,
+            visited,
+            parents,
+            &edges,
+        );
     }
 }
 
@@ -83,75 +97,115 @@ struct SearchRunner<'a> {
     // Whether vertex is already placed.
     order: Vec<usize>,
     // Parent of the vertex in topsort order.
-    parents: Vec<usize>,
+    parents: Vec<(usize, usize)>,
     pose: Pose,
+    best_dislikes: Option<u64>,
     scope: Scope<'a, (), Rc<RefCell<Pose>>>,
 }
 
 // TODO: Precalc this.
-fn get_deltas(distance: u64) -> Vec<(u64, u64)> {
+fn get_deltas(distance: i64) -> Vec<(i64, i64)> {
     let mut deltas = Vec::new();
     for dx in 0..distance {
         if dx * dx > distance {
             break;
         }
 
-        let dy = distance - dx * dx;
+        let dy = ((distance - dx * dx) as f64).sqrt().floor() as i64;
+        if dx * dx + dy * dy == distance {
+            deltas.push((dx, dy));
+            if dx != 0 {
+                deltas.push((-dx, dy));
+            }
+            if dy != 0 {
+                deltas.push((dx, -dy));
+            }
+            if dx != 0 && dy != 0 {
+                deltas.push((-dx, -dy));
+            }
+        }
     }
+    deltas.sort();
+    deltas.dedup();
     return deltas;
 }
 
 impl<'a> SearchRunner<'a> {
     fn place_vertices(&mut self, index: usize, problem: &Problem) -> Option<u64> {
+        debug!("place_vertex {}", index);
         if index == problem.figure.vertices.len() {
-            return Some(problem.dislikes(&self.pose));
+            let dislikes = problem.dislikes(&self.pose);
+
+            if self.best_dislikes.unwrap_or(10000000) > dislikes {
+                self.best_dislikes = Some(dislikes);
+                info!("Found better placement, dislikes: {}", dislikes);
+                self.scope.yield_(Rc::new(RefCell::new(self.pose.clone())));
+            }
+            return Some(dislikes);
         }
 
         let v = self.order[index];
-        let parent = self.parents[v];
+        let (parent, parent_edge_index) = self.parents[v];
+        let parent_pos = self.pose.vertices[parent];
         let mut best_result = None;
 
         // TODO: Precalc this.
-        let parent_d =
-            Figure::distance_squared_int(self.pose.vertices[v], self.pose.vertices[parent]);
+        let parent_bounds = problem.figure.edge_len2_bounds_int(parent_edge_index);
 
-        {
-            // Place vertex `v`.
-            // Attach to one of the previously placed vertices.
-            self.pose.vertices[index] = Point { x: 0, y: 0 };
+        for parent_d in parent_bounds.0..=parent_bounds.1 {
+            for (dx, dy) in get_deltas(parent_d) {
+                // Place vertex `v`.
+                // We attach it to one of the previously placed vertices.
+                self.pose.vertices[index] = Point {
+                    x: parent_pos.x + dx,
+                    y: parent_pos.y + dy,
+                };
+                if self.pose.vertices[index].x < 0 || self.pose.vertices[index].y < 0 {
+                    continue;
+                }
 
-            // TODO: Check that placement is within hole.
+                debug!(
+                    "Placed {},{} in ({}, {}), delta: ({}, {})",
+                    v, index, self.pose.vertices[index].x, self.pose.vertices[index].y, dx, dy
+                );
 
-            // Validate that the placement is not breaking any edges.
-            // TODO: Only traverse already placed vertices.
-            for &(e_id, dst) in problem.figure.vertex_edges[v].iter() {
-                if dst <= index {
-                    let d = Figure::distance_squared_int(
-                        self.pose.vertices[v],
-                        self.pose.vertices[dst],
-                    );
-                    let bounds = problem.figure.edge_len2_bounds_int(e_id);
-                    // Broken edge, placement is invalid, returning.
-                    if d < bounds.0 || d > bounds.1 {
-                        return None;
+                // TODO: Check that placement is within hole.
+
+                // Validate that the placement is not breaking any edges.
+                // TODO: Only traverse already placed vertices.
+                let mut has_violations = false;
+                for &(e_id, dst) in problem.figure.vertex_edges[v].iter() {
+                    if dst <= index {
+                        let d = Figure::distance_squared_int(
+                            self.pose.vertices[v],
+                            self.pose.vertices[dst],
+                        );
+                        let bounds = problem.figure.edge_len2_bounds_int(e_id);
+                        // Broken edge, placement is invalid, returning.
+                        if d < bounds.0 || d > bounds.1 {
+                            debug!("Bounds violated with {}, {} out of {:?}", dst, d, bounds);
+                            has_violations = true;
+                            break;
+                        }
                     }
                 }
-            }
+                if has_violations {
+                    continue;
+                }
 
-            if let Some(new_dislikes) = self.place_vertices(index + 1, problem) {
-                match best_result {
-                    Some(best_dislikes) => {
-                        if best_dislikes > new_dislikes {
+                if let Some(new_dislikes) = self.place_vertices(index + 1, problem) {
+                    match best_result {
+                        Some(best_dislikes) => {
+                            if best_dislikes > new_dislikes {
+                                best_result = Some(new_dislikes);
+                            }
+                        }
+                        None => {
                             best_result = Some(new_dislikes);
                         }
                     }
-                    None => {
-                        best_result = Some(new_dislikes);
-                    }
                 }
             }
-
-            // self.scope.yield_(Rc::new(RefCell::new(self.pose.clone())));
         }
         return best_result;
     }
