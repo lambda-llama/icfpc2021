@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::{thread, time};
 
+use geomath::prelude::coordinates::Polar;
 use ordered_float::NotNan;
 use raylib::prelude::*;
 
@@ -18,6 +19,7 @@ enum Tool {
     Move,
     Center,
     Fold,
+    Rotate,
 }
 
 struct GuiState {
@@ -32,6 +34,10 @@ struct GuiState {
     pub selected_points: HashSet<usize>,
     // Folding
     pub fold_points: HashSet<usize>,
+    // Rotation
+    pub rotate_pivot: Option<Point>,
+    pub rotate_vertices_copy: Vec<Point>, // to avoid rounding errors with deltas
+
     // Problem browser
     pub problems: Vec<CString>,
     pub problems_focus_idx: i32,
@@ -65,6 +71,8 @@ impl GuiState {
             selection_pos: None,
             selected_points: HashSet::new(),
             fold_points: HashSet::new(),
+            rotate_pivot: None,
+            rotate_vertices_copy: vec![],
             problems,
             problems_focus_idx: 0,
             problems_scroll_idx: 0,
@@ -91,8 +99,12 @@ impl GuiState {
         self.tool = tool;
         self.dragged_point = None;
         self.selection_pos = None;
-        self.selected_points.clear();
+        if tool != Tool::Move && tool != Tool::Rotate {
+            self.selected_points.clear();
+        }
         self.fold_points.clear();
+        self.rotate_pivot = None;
+        self.rotate_vertices_copy.clear();
     }
 
     fn create_translator(problem: &Problem) -> Translator {
@@ -192,7 +204,7 @@ fn render_gui(
     // Help bar
     const HELP_BAR_HEIGHT: f32 = 51.0;
     let mut text = b"\
-Tools: Q - Move, W - Center, E - Fold\n\
+Tools: Q - Move, W - Center, E - Fold, R - Rotate\n\
 Selection: Ctrl+A - Select all, Shift adds, Ctrl removes
 Misc: S - Save, D - Step solver, F - Run solver, Ctrl+L - Reset solution\n\
 "
@@ -232,6 +244,31 @@ Misc: S - Save, D - Step solver, F - Run solver, Ctrl+L - Reset solution\n\
     if let Some(pos) = state.selection_pos {
         let rect = vec2_to_rect(pos, d.get_mouse_position());
         d.draw_rectangle_lines_ex(rect, 1, Color::DARKGRAY);
+    }
+
+    // Rotation widget
+    if let Some(p) = state.rotate_pivot {
+        let pt = state.translate(&p);
+        let mouse_pos = d.get_mouse_position();
+        let mut vec =
+            geomath::vector::Vector2::new((mouse_pos.x - pt.x) as f64, (mouse_pos.y - pt.y) as f64);
+        let angle = vec.phi();
+        vec.set_phi(0.0);
+        vec.set_rho(60.0);
+        d.draw_circle_sector_lines(
+            pt,
+            40.0,
+            90,
+            90 - (angle / std::f64::consts::PI * 180.0) as i32,
+            36,
+            Color::GREEN,
+        );
+        d.draw_line_v(
+            pt,
+            Vector2::new(pt.x + vec.x as f32, pt.y + vec.y as f32),
+            Color::BLUE,
+        );
+        d.draw_line_v(pt, mouse_pos, Color::BLUE);
     }
 
     selected_problem
@@ -409,6 +446,7 @@ pub fn interact<'a>(
             render_problem(&mut d, &state, &problem, &pose.borrow());
             let selected_problem =
                 render_gui(&mut d, &thread, &mut state, &problem, &pose.borrow());
+
             if selected_problem != -1 && state.problems_selected != selected_problem {
                 state.problems_selected = selected_problem;
                 problem = state.load_problem()?;
@@ -449,7 +487,8 @@ pub fn interact<'a>(
                 }
                 Tool::Center => {
                     if let Some(idx) = v_idx {
-                        pose.borrow_mut().center(&problem.figure, idx, problem.bounding_box());
+                        pose.borrow_mut()
+                            .center(&problem.figure, idx, problem.bounding_box());
                     }
                 }
                 Tool::Fold => {
@@ -470,11 +509,17 @@ pub fn interact<'a>(
                         }
                     }
                 }
+                Tool::Rotate => {
+                    state.rotate_pivot = Some(mouse_p);
+                    state.rotate_vertices_copy = pose.borrow().vertices.clone();
+                }
             }
         }
 
         if rh.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON) {
             state.dragged_point = None;
+            state.rotate_pivot = None;
+            state.rotate_vertices_copy.clear();
             if let Some(pos) = state.selection_pos {
                 let rect = vec2_to_rect(pos, mouse_pos);
                 let min = state.untranslate(&Vector2 {
@@ -513,6 +558,20 @@ pub fn interact<'a>(
                     vertices[idx] = vertices[idx] + diff_p;
                 }
             }
+            if let Some(p) = state.rotate_pivot {
+                // state.rotate_angle_rad
+                let angle = geomath::vector::Vector2::new(
+                    (mouse_p.x - p.x) as f64,
+                    (mouse_p.y - p.y) as f64,
+                )
+                .phi();
+                for &idx in state.selected_points.iter() {
+                    // We need to restore the original point and rotate it to avoid
+                    // rounding errors due to the float angle rotation of int coords
+                    pose.borrow_mut().vertices[idx] = state.rotate_vertices_copy[idx];
+                    pose.borrow_mut().rotate(idx, p, angle);
+                }
+            }
         }
 
         let mut need_to_sleep = true;
@@ -521,9 +580,10 @@ pub fn interact<'a>(
                 KeyboardKey::KEY_Q => state.switch_tool(Tool::Move),
                 KeyboardKey::KEY_W => state.switch_tool(Tool::Center),
                 KeyboardKey::KEY_E => state.switch_tool(Tool::Fold),
+                KeyboardKey::KEY_R => state.switch_tool(Tool::Rotate),
                 KeyboardKey::KEY_A
                     if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
-                        && state.tool == Tool::Move =>
+                        && (state.tool == Tool::Move || state.tool == Tool::Rotate) =>
                 {
                     for idx in 0..problem.figure.vertices.len() {
                         state.selected_points.insert(idx);

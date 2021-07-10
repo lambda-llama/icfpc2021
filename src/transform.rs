@@ -1,3 +1,5 @@
+use geomath::prelude::coordinates::Polar;
+
 use crate::problem::*;
 
 // A separate trait for `Pose` transformations to have a clearer API
@@ -10,7 +12,7 @@ pub trait Transform {
     fn center(&mut self, f: &Figure, v: usize, search_region: (Point, Point));
 
     // Rotate a vertex around the pivot
-    fn rotate(&mut self, f: &Figure, v: usize, v_pivot: usize, angle: f64);
+    fn rotate(&mut self, v: usize, pivot: Point, angle_rad: f64);
 }
 
 impl Transform for Pose {
@@ -54,13 +56,13 @@ impl Transform for Pose {
         }
     }
 
-    fn center(&mut self, _f: &Figure, _v: usize, search_region: (Point, Point)) {
+    fn center(&mut self, f: &Figure, v: usize, search_region: (Point, Point)) {
         let (mn, mx) = search_region;
-        let p = self.vertices[_v];
+        let p = self.vertices[v];
         let loss = |p: Point| -> f64 {
             let mut res = 0.0f64;
-            for &(idx, w) in &_f.vertex_edges[_v] {
-                let e =&_f.edges[idx];
+            for &(idx, w) in &f.vertex_edges[v] {
+                let e = &f.edges[idx];
                 res += (Figure::distance_squared(self.vertices[w], p) / e.len2 - 1.0f64).abs();
             }
             res
@@ -68,20 +70,28 @@ impl Transform for Pose {
         let mut q = p;
         let mut best_loss = loss(p);
 
-        for x in mn.x..mx.x+1 {
+        for x in mn.x..mx.x + 1 {
             for y in mn.y..mx.y + 1 {
-                let t = Point{x, y};
-                let loss_t =loss(t);
+                let t = Point { x, y };
+                let loss_t = loss(t);
                 if loss_t < best_loss {
                     best_loss = loss_t;
                     q = t;
                 }
             }
         }
-        self.vertices[_v] = q;
+        self.vertices[v] = q;
     }
 
-    fn rotate(&mut self, _f: &Figure, _v: usize, _v_pivot: usize, _angle: f64) {
-        todo!()
+    fn rotate(&mut self, v: usize, pivot: Point, angle_rad: f64) {
+        dbg!((v, pivot, angle_rad));
+        let p = self.vertices[v];
+        let mut vec = geomath::vector::Vector2::new((p.x - pivot.x) as f64, (p.y - pivot.y) as f64);
+        vec.set_phi(vec.phi() + angle_rad);
+        dbg!((vec.phi(), vec.rho()));
+        self.vertices[v] = Point {
+            x: pivot.x + vec.x as i64,
+            y: pivot.y + vec.y as i64,
+        };
     }
 }
