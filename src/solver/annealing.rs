@@ -40,9 +40,9 @@ impl Solver for AnnealingSolver {
             let mut total_edge_violation = 0.0;
             for (i, edge) in problem.figure.edges.iter().enumerate() {
                 edge_violation[i] = edge_violation_after_move(
-                    pose.borrow().vertices[edge.0],
+                    pose.borrow().vertices[edge.v0],
                     i,
-                    edge.1,
+                    edge.v1,
                     &pose,
                     &problem.figure,
                 );

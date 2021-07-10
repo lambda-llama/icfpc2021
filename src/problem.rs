@@ -9,19 +9,26 @@ use crate::common::*;
 pub type Point = geo::Coordinate<i64>;
 
 #[derive(Debug)]
+pub struct Edge {
+    pub v0: usize,
+    pub v1: usize,
+    pub len2: f64,
+}
+
+#[derive(Debug)]
 pub struct Figure {
     pub vertices: Vec<Point>,
-    pub edges: Vec<(usize, usize)>,
+    pub edges: Vec<Edge>,
     pub vertex_edges: Vec<Vec<(usize, usize)>>,
     pub epsilon: f64,
 }
 
 impl Figure {
-    pub fn new(vertices: Vec<Point>, edges: Vec<(usize, usize)>, epsilon: f64) -> Self {
+    pub fn new(vertices: Vec<Point>, edges: Vec<Edge>, epsilon: f64) -> Self {
         let mut vertex_edges = vec![Vec::new(); vertices.len()];
         for (i, e) in edges.iter().enumerate() {
-            vertex_edges[e.0].push((i, e.1));
-            vertex_edges[e.1].push((i, e.0));
+            vertex_edges[e.v0].push((i, e.v1));
+            vertex_edges[e.v1].push((i, e.v0));
         }
 
         Self {
@@ -37,35 +44,32 @@ impl Figure {
     }
 
     pub fn edge_len2(&self, idx: usize, pose: &Pose) -> f64 {
-        let e = self.edges[idx];
-        let p = pose.vertices[e.0];
-        let q = pose.vertices[e.1];
-        Self::distance_squared(p, q)
-    }
-
-    pub fn edge_len2_default(&self, idx: usize) -> f64 {
-        let e = self.edges[idx];
-        let p = self.vertices[e.0];
-        let q = self.vertices[e.1];
+        let e = &self.edges[idx];
+        let p = pose.vertices[e.v0];
+        let q = pose.vertices[e.v1];
         Self::distance_squared(p, q)
     }
 
     pub fn edge_len2_bounds(&self, idx: usize) -> (f64, f64) {
-        let weight_default = self.edge_len2_default(idx);
+        let len2_default = self.edges[idx].len2;
         (
-            (1.0f64 - self.epsilon) * weight_default,
-            (1.0f64 + self.epsilon) * weight_default,
+            (1.0f64 - self.epsilon) * len2_default,
+            (1.0f64 + self.epsilon) * len2_default,
         )
+    }
+
+    pub fn edge_len2_diff(&self, idx: usize, pose: &Pose) -> f64 {
+        (self.edge_len2(idx, pose) - self.edges[idx].len2).abs()
     }
 
     // TODO: bool => enum (ok, close to bad, bad)
     pub fn test_edge_len2(&self, idx: usize, pose: &Pose) -> bool {
-        let (min, max) = self.edge_len2_bounds(idx);
-        let len = self.edge_len2(idx, pose);
-        if len < min || len > max {
-            false
-        } else {
+        let diff = self.edge_len2_diff(idx, pose);
+        let allowed = self.epsilon * self.edges[idx].len2;
+        if diff <= allowed {
             true
+        } else {
+            false
         }
     }
 }
@@ -102,21 +106,23 @@ impl Problem {
             figure: RawFigure { vertices, edges },
             epsilon,
         } = serde_json::from_slice(data)?;
+        let vertices = vertices
+            .into_iter()
+            .map(|p| Point { x: p[0], y: p[1] })
+            .collect::<Vec<_>>();
+        let edges = edges
+            .into_iter()
+            .map(|e| Edge {
+                v0: e[0] as usize,
+                v1: e[1] as usize,
+                len2: Figure::distance_squared(vertices[e[0] as usize], vertices[e[1] as usize]),
+            })
+            .collect();
         Ok(Problem::new(
             hole.into_iter()
                 .map(|p| Point { x: p[0], y: p[1] })
                 .collect(),
-            Figure::new(
-                vertices
-                    .into_iter()
-                    .map(|p| Point { x: p[0], y: p[1] })
-                    .collect(),
-                edges
-                    .into_iter()
-                    .map(|e| (e[0] as usize, e[1] as usize))
-                    .collect(),
-                epsilon as f64 / 1_000_000.0f64,
-            ),
+            Figure::new(vertices, edges, epsilon as f64 / 1_000_000.0f64),
         ))
     }
 
@@ -138,16 +144,18 @@ impl Problem {
 
     pub fn validate(&self, pose: &Pose) -> bool {
         // 1 - vertices are inside
-        let to_fp = |p: Point| geo::Point::new(p.x as f64, p.y as f64);
         for &p in &pose.vertices {
-            let relation = self.poly.relate(&to_fp(p));
+            let relation = self.poly.relate(&p.convert());
             if !(relation.is_within() || relation.is_intersects()) {
                 return false;
             }
         }
         // 2 - edges are inside
-        for (u, v) in &self.figure.edges {
-            let s = geo::LineString::from(vec![to_fp(pose.vertices[*u]), to_fp(pose.vertices[*v])]);
+        for e in &self.figure.edges {
+            let s = geo::LineString::from(vec![
+                pose.vertices[e.v0].convert(),
+                pose.vertices[e.v1].convert(),
+            ]);
             let relation = self.poly.relate(&s);
             if !relation.is_contains() {
                 return false;
@@ -163,7 +171,7 @@ impl Problem {
     }
 
     pub fn min_distance_to(&self, point: Point) -> f64 {
-        let p = geo::Point::new(point.x as f64, point.y as f64);
+        let p = point.convert();
         if self.poly.contains(&p) {
             return 0.0;
         }

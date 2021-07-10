@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use geo::relate::Relate;
 
-use crate::problem::*;
+use crate::{common::PointConversion, problem::*};
 
 use super::Solver;
 
@@ -18,7 +18,7 @@ impl Solver for JammerSolver {
         generator::Gn::new_scoped_local(move |mut s| {
             s.yield_(pose.clone());
 
-            // Step 1 - Jam all outside vertices in
+            // Jam all outside vertices in
             let (min_p, max_p) = problem.bounding_box();
             let center = geo::Point::new(
                 (min_p.x + (max_p.x - min_p.x) / 2) as f64,
@@ -32,7 +32,7 @@ impl Solver for JammerSolver {
                 .enumerate()
                 .collect::<Vec<_>>();
             for (idx, v) in idx_vertices {
-                let mut p = geo::Point::new(v.x as f64, v.y as f64);
+                let mut p = v.convert();
                 let mut rel = problem.poly.relate(&p);
                 if !(rel.is_within() || rel.is_intersects()) {
                     while !(rel.is_within() || rel.is_intersects()) {

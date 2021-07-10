@@ -79,10 +79,10 @@ fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, p
         last_p = Some(p);
     }
 
-    for (idx, (i, j)) in problem.figure.edges.iter().enumerate() {
+    for (idx, e) in problem.figure.edges.iter().enumerate() {
         d.draw_line_ex(
-            t.translate(&pose.vertices[*i as usize]),
-            t.translate(&pose.vertices[*j as usize]),
+            t.translate(&pose.vertices[e.v0 as usize]),
+            t.translate(&pose.vertices[e.v1 as usize]),
             LINE_THICKNESS_EDGE,
             match problem.figure.test_edge_len2(idx, pose) {
                 true => COLOR_EDGE_OK,
