@@ -8,6 +8,9 @@ pub trait Transform {
 
     // "Center" a vertex by minimizing the sum of errors of its edges
     fn center(&mut self, f: &Figure, v: usize);
+
+    // Rotate a vertex around the pivot
+    fn rotate(&mut self, f: &Figure, v: usize, v_pivot: usize, angle: f64);
 }
 
 impl Transform for Pose {
@@ -47,6 +50,10 @@ impl Transform for Pose {
     }
 
     fn center(&mut self, _f: &Figure, _v: usize) {
+        todo!()
+    }
+
+    fn rotate(&mut self, _f: &Figure, _v: usize, _v_pivot: usize, _angle: f64) {
         todo!()
     }
 }
