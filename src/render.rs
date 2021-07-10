@@ -30,6 +30,9 @@ struct GuiState {
     pub rotate_pivot: Option<Point>,
     pub rotate_vertices_copy: Vec<Point>, // to avoid rounding errors with deltas
 
+    // Highlighting
+    pub target_dist: Option<f64>,
+
     // Problem browser
     pub problems: Vec<CString>,
     pub problems_focus_idx: i32,
@@ -65,6 +68,7 @@ impl GuiState {
             fold_points: HashSet::new(),
             rotate_pivot: None,
             rotate_vertices_copy: vec![],
+            target_dist: None,
             problems,
             problems_focus_idx: 0,
             problems_scroll_idx: 0,
@@ -85,11 +89,13 @@ impl GuiState {
             Self::load_problem_ex(&self.problems_path, (self.problems_selected + 1) as u32)?;
         self.translator = Self::create_translator(&problem);
         self.dragged_point = None;
+        self.viewport_drag_point = None;
         self.selection_pos = None;
         self.selected_points.clear();
         self.fold_points.clear();
         self.rotate_pivot = None;
         self.rotate_vertices_copy.clear();
+        self.target_dist = None;
         Ok(problem)
     }
 
@@ -286,6 +292,7 @@ fn render_problem(d: &mut RaylibDrawHandle, state: &GuiState, problem: &Problem,
     const COLOR_EDGE_OK: Color = Color::GREEN;
     const COLOR_EDGE_TOO_SHORT: Color = Color::BLUE;
     const COLOR_EDGE_TOO_LONG: Color = Color::RED;
+    const COLOR_EDGE_HIGHLIGHT: Color = Color::MAGENTA;
 
     // Grid
     let connected_edge_bounds = state.dragged_point.map(|v_idx| {
@@ -354,15 +361,28 @@ fn render_problem(d: &mut RaylibDrawHandle, state: &GuiState, problem: &Problem,
 
     // Edges
     for (idx, e) in problem.figure.edges.iter().enumerate() {
+        let color = {
+            state
+                .target_dist
+                .and_then(|dist| {
+                    let (min, max) = problem.figure.edge_len2_bounds(idx);
+                    if min <= dist && dist <= max {
+                        Some(COLOR_EDGE_HIGHLIGHT)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| match problem.figure.test_edge_len2(idx, pose) {
+                    EdgeTestResult::Ok => COLOR_EDGE_OK,
+                    EdgeTestResult::TooShort => COLOR_EDGE_TOO_SHORT,
+                    EdgeTestResult::TooLong => COLOR_EDGE_TOO_LONG,
+                })
+        };
         d.draw_line_ex(
             state.translate(&pose.vertices[e.v0 as usize]),
             state.translate(&pose.vertices[e.v1 as usize]),
             LINE_THICKNESS_EDGE,
-            match problem.figure.test_edge_len2(idx, pose) {
-                EdgeTestResult::Ok => COLOR_EDGE_OK,
-                EdgeTestResult::TooShort => COLOR_EDGE_TOO_SHORT,
-                EdgeTestResult::TooLong => COLOR_EDGE_TOO_LONG,
-            },
+            color,
         );
     }
 
@@ -382,6 +402,25 @@ fn render_problem(d: &mut RaylibDrawHandle, state: &GuiState, problem: &Problem,
 fn hit_test_point(pose: &Pose, mouse_pos: Point, dist: i64) -> Option<usize> {
     let mut points_with_dist = pose
         .vertices
+        .iter()
+        .enumerate()
+        .map(|(i, &p)| {
+            let dist = NotNan::new(Figure::distance_squared(p, mouse_pos).sqrt()).unwrap();
+            (i, dist)
+        })
+        .collect::<Vec<_>>();
+    points_with_dist.sort_unstable_by_key(|p| p.1);
+    if points_with_dist[0].1.into_inner() < dist as f64 {
+        Some(points_with_dist[0].0)
+    } else {
+        None
+    }
+}
+
+// TODO: remove duplication
+fn hit_test_hole(problem: &Problem, mouse_pos: Point, dist: i64) -> Option<usize> {
+    let mut points_with_dist = problem
+        .hole
         .iter()
         .enumerate()
         .map(|(i, &p)| {
@@ -462,6 +501,13 @@ pub fn interact<'a>(
 
         if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             let mouse_p = state.untranslate(&mouse_pos);
+            if let Some(h_idx) = hit_test_hole(&problem, mouse_p, 2) {
+                let h_idx2 = (h_idx + 1) % problem.hole.len();
+                state.target_dist = Some(Figure::distance_squared(
+                    problem.hole[h_idx],
+                    problem.hole[h_idx2],
+                ));
+            }
             let v_idx = hit_test_point(&pose.borrow(), mouse_p, 2);
             if rh.is_key_down(KeyboardKey::KEY_R) {
                 state.rotate_pivot = Some(mouse_p);
