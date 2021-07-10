@@ -338,7 +338,7 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
                 }
                 Tool::Center => {
                     if let Some(idx) = v_idx {
-                        pose.borrow_mut().center(&problem.figure, idx);
+                        pose.borrow_mut().center(&problem.figure, idx, problem.bounding_box());
                     }
                 }
                 Tool::Fold => {
