@@ -56,12 +56,14 @@ impl Solver for TreeSearchSolver {
                             continue;
                         }
                         debug!("Placed vertex 0 in ({}, {})", x, y);
+                        runner.placed[runner.order[0]] = true;
                         let result = runner.place_vertices(1, &problem);
                         if result.is_some() {
                             if result.unwrap() == 0 {
                                 done!();
                             }
                         }
+                        runner.placed[runner.order[0]] = false;
                     }
                 }
             }
