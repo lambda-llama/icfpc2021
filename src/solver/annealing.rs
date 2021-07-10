@@ -93,12 +93,30 @@ impl Solver for AnnealingSolver {
                     // let vertex_index: usize =
                     //     rng.gen::<usize>() % pose.borrow().vertices.len();
                     let vertex_index: usize = inner_it % pose.borrow().vertices.len();
-                    let direction: usize = rng.gen::<usize>() % 4;
                     let cur_pos = pose.borrow().vertices[vertex_index];
-                    let new_pos = Point {
-                        x: cur_pos.x + step_size * DX[direction],
-                        y: cur_pos.y + step_size * DY[direction],
-                    };
+
+                    let mut options = 4;
+                    // We can do a mirror rotation in this case.
+                    if problem.figure.vertex_edges[vertex_index].len() == 1 {
+                        options += 1;
+                    }
+
+                    let new_pos;
+                    let choice = rng.gen::<usize>() % options;
+                    if choice < 4 {
+                        let direction: usize = choice;
+                        new_pos = Point {
+                            x: cur_pos.x + step_size * DX[direction],
+                            y: cur_pos.y + step_size * DY[direction],
+                        };
+                    } else {
+                        let dst_vertex_index = problem.figure.vertex_edges[vertex_index][0].1;
+                        let dst_pos = pose.borrow().vertices[dst_vertex_index];
+                        new_pos = Point {
+                            x: dst_pos.x + (dst_pos.x - cur_pos.x),
+                            y: dst_pos.y + (dst_pos.y - cur_pos.y),
+                        }
+                    }
 
                     // Do a change.
                     pose.borrow_mut().vertices[vertex_index] = new_pos;
