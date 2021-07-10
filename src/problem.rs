@@ -318,6 +318,7 @@ struct RawProblem {
 #[derive(Deserialize, Serialize)]
 struct RawPose {
     pub vertices: Vec<Vec<i64>>,
+    #[serde(default)]
     pub bonuses: Vec<RawBonusUse>,
 }
 
