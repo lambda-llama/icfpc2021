@@ -17,7 +17,6 @@ use crate::transform::Transform;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Tool {
     Move,
-    Center,
     Fold,
     Rotate,
 }
@@ -92,6 +91,8 @@ impl GuiState {
         let problem =
             Self::load_problem_ex(&self.problems_path, (self.problems_selected + 1) as u32)?;
         self.translator = Self::create_translator(&problem);
+        self.switch_tool(Tool::Move);
+        self.selected_points.clear();
         Ok(problem)
     }
 
@@ -485,12 +486,6 @@ pub fn interact<'a>(
                         state.selection_pos = Some(mouse_pos);
                     }
                 }
-                Tool::Center => {
-                    if let Some(idx) = v_idx {
-                        pose.borrow_mut()
-                            .center(&problem.figure, idx, problem.bounding_box());
-                    }
-                }
                 Tool::Fold => {
                     if let Some(idx) = v_idx {
                         if state.fold_points.contains(&idx) {
@@ -578,8 +573,39 @@ pub fn interact<'a>(
         if let Some(key) = rh.get_key_pressed() {
             match key {
                 KeyboardKey::KEY_Q => state.switch_tool(Tool::Move),
-                KeyboardKey::KEY_W => state.switch_tool(Tool::Center),
-                KeyboardKey::KEY_E => state.switch_tool(Tool::Fold),
+                KeyboardKey::KEY_W => state.switch_tool(Tool::Fold),
+                KeyboardKey::KEY_E => {
+                    let points = if rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT) {
+                        state.selected_points.iter().cloned().collect::<Vec<_>>()
+                    } else {
+                        // If Shift is not pressed, only process points that have illegal edges
+                        let mut points_with_ill_edge_counts = state
+                            .selected_points
+                            .iter()
+                            .map(|&idx| {
+                                let illegal_edges_count = problem.figure.vertex_edges[idx]
+                                    .iter()
+                                    .filter(|&&(e, _v)| {
+                                        problem.figure.test_edge_len2(e, &pose.borrow())
+                                            != EdgeTestResult::Ok
+                                    })
+                                    .count();
+                                (idx, illegal_edges_count)
+                            })
+                            .filter(|&(_idx, count)| count > 0)
+                            .collect::<Vec<_>>();
+                        points_with_ill_edge_counts
+                            .sort_unstable_by_key(|&(_idx, count)| usize::MAX - count);
+                        points_with_ill_edge_counts
+                            .into_iter()
+                            .map(|(idx, _count)| idx)
+                            .collect()
+                    };
+                    for idx in points {
+                        pose.borrow_mut()
+                            .center(&problem.figure, idx, problem.bounding_box());
+                    }
+                }
                 KeyboardKey::KEY_R => state.switch_tool(Tool::Rotate),
                 KeyboardKey::KEY_A
                     if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
