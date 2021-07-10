@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::ffi::CStr;
 use std::rc::Rc;
 use std::{thread, time};
 
@@ -46,6 +47,30 @@ impl Translator {
             y: ((v.y - self.y_offset) / self.y_step + (self.zero.y as f32)).round() as i64,
         };
     }
+}
+
+fn render_gui(d: &mut RaylibDrawHandle, thread: &RaylibThread, problem: &Problem, pose: &Pose) {
+    // Window title
+    d.set_window_title(
+        &thread,
+        &format!(
+            "eps: {}; dlike_score: {}; inside: {}",
+            problem.figure.epsilon,
+            problem.dislikes(pose),
+            problem.validate(pose),
+        ),
+    );
+
+    // Status bar
+    d.gui_status_bar(
+        Rectangle {
+            x: 0.0,
+            y: 0.0,
+            width: d.get_screen_width() as f32,
+            height: 25.0,
+        },
+        Some(CStr::from_bytes_with_nul(b"TEST\0").unwrap()),
+    );
 }
 
 fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, pose: &Pose) {
@@ -138,7 +163,7 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
     const WINDOW_HEIGHT: i32 = 768;
 
     const VIEWPORT_OFFSET_X: f32 = 20.0;
-    const VIEWPORT_OFFSET_Y: f32 = 20.0;
+    const VIEWPORT_OFFSET_Y: f32 = 45.0;
     const VIEWPORT_WIDTH: f32 = 600.0;
     const VIEWPORT_HEIGHT: f32 = 600.0;
 
@@ -158,17 +183,9 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
 
     while !rh.window_should_close() {
         {
-            rh.set_window_title(
-                &thread,
-                &format!(
-                    "eps: {}; dlike_score: {}; inside: {}",
-                    problem.figure.epsilon,
-                    problem.dislikes(&pose.borrow()),
-                    problem.validate(&pose.borrow()),
-                ),
-            );
             let mut d = rh.begin_drawing(&thread);
             d.clear_background(Color::WHITE);
+            render_gui(&mut d, &thread, &problem, &pose.borrow());
             render_problem(&mut d, &t, &problem, &pose.borrow());
         }
 
