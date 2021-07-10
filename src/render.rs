@@ -19,6 +19,7 @@ enum Tool {
 
 struct GuiState {
     pub tool: Tool,
+    pub dragged_point: Option<usize>,
 }
 
 struct Translator {
@@ -105,12 +106,22 @@ fn render_gui(
     );
 }
 
-fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, pose: &Pose) {
+fn render_problem(
+    d: &mut RaylibDrawHandle,
+    state: &GuiState,
+    t: &Translator,
+    problem: &Problem,
+    pose: &Pose,
+) {
     const POINT_RADIUS: f32 = 5.0;
     const POINT_RADIUS_BONUS_UNLOCK: f32 = 6.0;
+    const POINT_RADIUS_GRID_HIGHLIGHT: f32 = 2.0;
+    const POINT_RADIUS_GRID_HIGHLIGHT2: f32 = 3.0;
     const LINE_THICKNESS_HOLE: f32 = 4.0;
     const LINE_THICKNESS_EDGE: f32 = 2.5;
     const COLOR_GRID: Color = Color::GRAY;
+    const COLOR_GRID_ONE_EDGE: Color = Color::ORANGE;
+    const COLOR_GRID_ALL_EDGES: Color = Color::GREEN;
     const COLOR_HOLE: Color = Color::BLACK;
     const COLOR_BONUS_UNLOCK: Color = Color::GOLD;
     const COLOR_VERTEX: Color = Color::DARKGREEN;
@@ -119,9 +130,42 @@ fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, p
     const COLOR_EDGE_TOO_LONG: Color = Color::RED;
 
     // Grid
+    let connected_edge_bounds = state.dragged_point.map(|v_idx| {
+        problem.figure.vertex_edges[v_idx]
+            .iter()
+            .map(|&(e, v)| (v, problem.figure.edge_len2_bounds(e)))
+            .collect::<Vec<_>>()
+    });
     for x in t.zero.x..t.max.x {
         for y in t.zero.y..t.max.y {
-            d.draw_pixel_v(t.translate(&Point { x, y }), COLOR_GRID);
+            let (all, any) = if let Some(connected_edge_bounds) = connected_edge_bounds.as_ref() {
+                let mut all = true;
+                let mut any = false;
+                for &(v_idx, (min, max)) in connected_edge_bounds.iter() {
+                    let v = pose.vertices[v_idx];
+                    let dist = Figure::distance_squared(Point { x, y }, v);
+                    if min <= dist && dist <= max {
+                        any = true;
+                    } else {
+                        all = false;
+                    }
+                }
+                (all, any)
+            } else {
+                (false, false)
+            };
+            let grid_point = t.translate(&Point { x, y });
+            if all {
+                d.draw_circle_v(
+                    grid_point,
+                    POINT_RADIUS_GRID_HIGHLIGHT2,
+                    COLOR_GRID_ALL_EDGES,
+                )
+            } else if any {
+                d.draw_circle_v(grid_point, POINT_RADIUS_GRID_HIGHLIGHT, COLOR_GRID_ONE_EDGE)
+            } else {
+                d.draw_pixel_v(grid_point, COLOR_GRID);
+            };
         }
     }
 
@@ -201,7 +245,6 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
 
     let (mut rh, thread) = raylib::init().size(WINDOW_WIDTH, WINDOW_HEIGHT).build();
 
-    let mut dragged_point = None;
     let t = Translator::new(
         VIEWPORT_OFFSET_X,
         VIEWPORT_OFFSET_Y,
@@ -213,14 +256,17 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
     let mut gen = solver.solve_gen(&problem, Rc::new(RefCell::new(pose)));
     let pose = gen.resume().unwrap();
 
-    let mut state = GuiState { tool: Tool::Move };
+    let mut state = GuiState {
+        tool: Tool::Move,
+        dragged_point: None,
+    };
 
     while !rh.window_should_close() {
         {
             let mut d = rh.begin_drawing(&thread);
             d.clear_background(Color::WHITE);
             render_gui(&mut d, &thread, &state, &problem, &pose.borrow());
-            render_problem(&mut d, &t, &problem, &pose.borrow());
+            render_problem(&mut d, &state, &t, &problem, &pose.borrow());
         }
 
         if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
@@ -228,7 +274,7 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
             let v_idx = hit_test(&pose.borrow(), mouse_pos, 2);
             match state.tool {
                 Tool::Move => {
-                    dragged_point = v_idx;
+                    state.dragged_point = v_idx;
                 }
                 Tool::Center => {
                     if let Some(idx) = v_idx {
@@ -239,12 +285,12 @@ pub fn interact<'a>(problem: Problem, solver: &Box<dyn Solver>, pose: Pose) -> R
         }
 
         if rh.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON) {
-            dragged_point = None;
+            state.dragged_point = None;
         }
 
         if rh.get_gesture_detected() == GestureType::GESTURE_DRAG {
             let mouse_pos = t.untranslate(&rh.get_mouse_position());
-            if let Some(idx) = dragged_point {
+            if let Some(idx) = state.dragged_point {
                 pose.borrow_mut().vertices[idx] = mouse_pos;
             }
         }

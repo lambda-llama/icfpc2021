@@ -174,8 +174,8 @@ fn main() -> Result<()> {
 
             for i in 1..count {
                 let problem = Problem::from_json(&std::fs::read(
-                        problems_path.join(format!("{}.problem", i)),
-                        )?)?;
+                    problems_path.join(format!("{}.problem", i)),
+                )?)?;
                 let solution_path = solutions_path.join(format!("{}.solution", i));
                 if !solution_path.exists() {
                     info!("No solution for problem {}", i);
@@ -206,7 +206,6 @@ fn main() -> Result<()> {
                 let solution_state_data = SolutionState { dislikes };
                 std::fs::write(solution_state_path, solution_state_data.to_json()?)?;
             }
-
         }
         Some(("stats", matches)) => {
             let problems_path = std::path::Path::new(matches.value_of("INPUT").unwrap());
