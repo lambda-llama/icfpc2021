@@ -13,6 +13,7 @@ mod common;
 mod portal;
 mod problem;
 mod render;
+mod runner;
 mod solver;
 
 use crate::common::*;
@@ -26,18 +27,17 @@ fn main() -> Result<()> {
                 .arg("<INPUT> path/to/N.problem")
                 .arg("<OUTPUT> path/to/N.solution"),
         )
-        // Run one solver on all problems
+        // Run one or all solvers on all problems
         .subcommand(
             App::new("solve")
-                .arg("<SOLVER> solver name")
-                .arg("<INPUT> path/to/problems")
-                .arg("<OUTPUT> path/to/solutions"),
-        )
-        // Run all solvers on all problems and replace the solutions with the best one
-        .subcommand(
-            App::new("solve_all")
-                .arg("<INPUT> path/to/problems")
-                .arg("<OUTPUT> path/to/solutions"),
+                .arg(Arg::new("INPUT").default_value("./problems"))
+                .arg(Arg::new("OUTPUT").default_value("./solutions"))
+                .arg(
+                    Arg::new("SOLVER")
+                        .short('a')
+                        .takes_value(true)
+                        .default_missing_value(""),
+                ),
         )
         .subcommand(
             App::new("render")
@@ -74,67 +74,18 @@ fn main() -> Result<()> {
             std::fs::write(matches.value_of("OUTPUT").unwrap(), json)?;
         }
         Some(("solve", matches)) => {
-            let name = matches.value_of("SOLVER").unwrap();
-            let solver = solver::SOLVERS
-                .get(name)
-                .expect(&format!("Failed to find solver '{}'", name));
-            let problems_path = std::path::Path::new(matches.value_of("INPUT").unwrap());
-            let solutions_path =
-                std::path::Path::new(matches.value_of("OUTPUT").unwrap()).join(name);
-            std::fs::create_dir_all(&solutions_path)?;
-            // NOTE: we're assuming the files are named N.problem as this allows to iterate them in order
-            let count = problems_path.read_dir()?.count();
-            for i in 1..=count {
-                let problem = Problem::from_json(&std::fs::read(
-                    problems_path.join(format!("{}.problem", i)),
-                )?)?;
-                println!("Solving {}", i);
-                let pose = solver.solve(&problem);
-                println!("Done, dislikes = {}", problem.dislikes(&pose));
-                std::fs::write(
-                    solutions_path.join(format!("{}.solution", i)),
-                    pose.to_json()?,
-                )?;
-            }
-        }
-        Some(("solve_all", matches)) => {
+            let solver_name = match matches.value_of("SOLVER") {
+                Some("") | None => None,
+                Some(name) => {
+                    solver::SOLVERS
+                        .get(name)
+                        .expect(&format!("Failed to find solver '{}'", name));
+                    Some(name)
+                }
+            };
             let problems_path = std::path::Path::new(matches.value_of("INPUT").unwrap());
             let solutions_base_path = std::path::Path::new(matches.value_of("OUTPUT").unwrap());
-            // NOTE: we're assuming the files are named N.problem as this allows to iterate them in order
-            let count = problems_path.read_dir()?.count();
-            for i in 1..=count {
-                let problem = Problem::from_json(&std::fs::read(
-                    problems_path.join(format!("{}.problem", i)),
-                )?)?;
-                let solution_path = solutions_base_path.join(format!("{}.solution", i));
-                let mut best_dislikes = if solution_path.exists() {
-                    problem.dislikes(&Pose::from_json(&std::fs::read(&solution_path)?)?)
-                } else {
-                    u64::MAX
-                };
-                println!("Solving {}", i);
-                for name in solver::SOLVERS.keys() {
-                    let solutions_path = solutions_base_path.join(name);
-                    std::fs::create_dir_all(&solutions_path)?;
-                    let solver = solver::SOLVERS.get(name).unwrap();
-                    let pose = solver.solve(&problem);
-                    let dislikes = problem.dislikes(&pose);
-                    let valid = problem.validate(&pose);
-                    println!("  {}: dislikes = {}, valid = {}", name, dislikes, valid);
-                    if valid {
-                        let current_solution_path = solutions_path.join(format!("{}.solution", i));
-                        std::fs::write(&current_solution_path, pose.to_json()?)?;
-                        if best_dislikes > dislikes {
-                            println!(
-                                "Replacing the current best solution ({} > {})",
-                                best_dislikes, dislikes
-                            );
-                            std::fs::copy(current_solution_path, &solution_path)?;
-                            best_dislikes = dislikes;
-                        }
-                    }
-                }
-            }
+            runner::run(problems_path, solutions_base_path, solver_name)?;
         }
         Some(("render", matches)) => {
             let problem = Problem::from_json(&std::fs::read(matches.value_of("INPUT").unwrap())?)?;
