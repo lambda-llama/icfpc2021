@@ -50,21 +50,25 @@ impl Translator {
 
 fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, pose: &Pose) {
     const POINT_RADIUS: f32 = 5.0;
+    const POINT_RADIUS_BONUS_UNLOCK: f32 = 6.0;
     const LINE_THICKNESS_HOLE: f32 = 4.0;
     const LINE_THICKNESS_EDGE: f32 = 2.5;
     const COLOR_GRID: Color = Color::GRAY;
     const COLOR_HOLE: Color = Color::BLACK;
+    const COLOR_BONUS_UNLOCK: Color = Color::GOLD;
     const COLOR_VERTEX: Color = Color::DARKGREEN;
     const COLOR_EDGE_OK: Color = Color::GREEN;
     const COLOR_EDGE_TOO_SHORT: Color = Color::BLUE;
     const COLOR_EDGE_TOO_LONG: Color = Color::RED;
 
+    // Grid
     for x in t.zero.x..t.max.x {
         for y in t.zero.y..t.max.y {
             d.draw_pixel_v(t.translate(&Point { x, y }), COLOR_GRID);
         }
     }
 
+    // Hole
     let mut last_p: Option<&Point> = problem.hole.last();
     for p in problem.hole.iter() {
         d.draw_circle_v(t.translate(&p), POINT_RADIUS, COLOR_HOLE);
@@ -80,6 +84,16 @@ fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, p
         last_p = Some(p);
     }
 
+    // Bonus unlocks
+    for b in problem.bonuses.iter() {
+        d.draw_circle_v(
+            t.translate(&b.position),
+            POINT_RADIUS_BONUS_UNLOCK,
+            COLOR_BONUS_UNLOCK,
+        );
+    }
+
+    // Edges
     for (idx, e) in problem.figure.edges.iter().enumerate() {
         d.draw_line_ex(
             t.translate(&pose.vertices[e.v0 as usize]),
@@ -92,6 +106,8 @@ fn render_problem(d: &mut RaylibDrawHandle, t: &Translator, problem: &Problem, p
             },
         );
     }
+
+    // Vertices
     for p in pose.vertices.iter() {
         d.draw_circle_v(t.translate(p), POINT_RADIUS, COLOR_VERTEX);
     }

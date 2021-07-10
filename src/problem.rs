@@ -109,9 +109,9 @@ impl From<BonusType> for String {
 
 #[derive(Debug)]
 pub struct BonusUnlock {
-    position: Point,
-    bonus: BonusType,
-    problem: u32,
+    pub position: Point,
+    pub bonus: BonusType,
+    pub problem: u32,
 }
 
 #[derive(Debug)]
@@ -263,8 +263,8 @@ impl Problem {
 
 #[derive(Clone, Copy, Debug)]
 pub struct BonusUse {
-    bonus: BonusType,
-    problem: u32,
+    pub bonus: BonusType,
+    pub problem: u32,
 }
 
 #[derive(Clone, Debug, Default)]
