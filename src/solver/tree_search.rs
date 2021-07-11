@@ -60,6 +60,7 @@ impl Solver for TreeSearchSolver {
                     &problem.figure.vertex_edges,
                     &mut topo_vertex_edges,
                 );
+                info!("order: {:?}", order);
                 for i in 0..figure_size {
                     v_in_order[order[i]] = i;
                 }
@@ -90,6 +91,7 @@ impl Solver for TreeSearchSolver {
                 }
             }
             for v in delta_precalc.iter_mut() {
+                v.sort();
                 v.dedup();
                 v.shuffle(&mut rng);
             }
@@ -112,6 +114,8 @@ impl Solver for TreeSearchSolver {
                         forward_edges[v].push((e_id, dst));
                     }
                 }
+                info!("{} back edges: {:?}", v, back_edges[v]);
+                info!("{} forward edges: {:?}", v, forward_edges[v]);
             }
 
             let mut vertex_deltas: Vec<Vec<(i64, i64)>> = vec![Vec::new(); figure_size];
@@ -152,12 +156,12 @@ impl Solver for TreeSearchSolver {
                     // places_list[start_vertex].borrow_mut().push((x, y));
                 }
             }
+            // places_list[start_vertex].borrow_mut().push((25, 82));
 
             // Try to place the starting vertex in one of the hole vertices.
             for p in &problem.hole {
                 places_list[start_vertex].borrow_mut().push((p.x, p.y));
             }
-
 
             //             // Each cycle is a sequence of (destination_vertex, edge_index_leading_to_it).
             //             let mut vertex_cycles: Vec<Vec<Vec<(usize, usize)>>> =
@@ -202,9 +206,8 @@ impl Solver for TreeSearchSolver {
                 parents,
                 pose: pose.borrow().clone(),
                 best_dislikes: None,
-                start_time: std::time::Instant::now(),
                 last_log_time: std::time::Instant::now(),
-                timeout: timeout,
+                timeout,
                 iterations: 0,
                 terminate: false,
                 bbox_mn: mn,
@@ -318,7 +321,6 @@ struct SearchRunner<'a> {
     parents: Vec<(usize, usize)>,
     pose: Pose,
     best_dislikes: Option<u64>,
-    start_time: std::time::Instant,
     last_log_time: std::time::Instant,
     timeout: Option<std::time::Duration>,
     iterations: u64,
@@ -409,6 +411,7 @@ impl<'a> SearchRunner<'a> {
             } else {
                 debug!("Placed vertex {} in ({}, {})", v, p.0, p.1);
             }
+
             self.pose.vertices[v] = Point { x: p.0, y: p.1 };
 
             let mut can_continue_placement = true;
@@ -456,14 +459,33 @@ impl<'a> SearchRunner<'a> {
                 }
             }
             if can_continue_placement {
+                // Validate that the placement is not breaking any edges.
+                let mut has_violations = false;
+                for &(e_id, dst) in back_edges[v].iter() {
+                    let d = Figure::distance_squared_int(
+                        self.pose.vertices[v],
+                        self.pose.vertices[dst],
+                    );
+                    // Go over deltas precalcs here.
+                    let bounds = &edge_precalc[e_id];
+                    // Broken edge, placement is invalid, returning.
+                    if d < bounds.0 || d > bounds.1 {
+                        info!("Bounds violated with {}, {} out of {:?}", dst, d, bounds);
+                        has_violations = true;
+                        break;
+                    }
+                }
+
                 // Dive deeper.
                 let child_deadline = match index {
-                    0 => {
-                        match self.timeout {
-                            Some(timeout) => Some(std::time::Instant::now() + 
-                                std::time::Duration::from_secs_f32(timeout.as_secs_f32() / v_places.len() as f32)),
-                            None => None,
-                        }
+                    0 => match self.timeout {
+                        Some(timeout) => Some(
+                            std::time::Instant::now()
+                                + std::time::Duration::from_secs_f32(
+                                    timeout.as_secs_f32() / v_places.len() as f32,
+                                ),
+                        ),
+                        None => None,
                     },
                     _ => deadline,
                 };
