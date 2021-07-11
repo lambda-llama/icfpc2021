@@ -8,6 +8,9 @@ pub trait Transform {
     // Fold (mirror) a component selected by `vcomp` over a line defined by `v1` and `v2`
     fn fold(&mut self, f: &Figure, v1: usize, v2: usize, vcomp: usize);
 
+    // Pulls all adjacent vertices closer (to the legal length)
+    fn pull(&mut self, f: &Figure, v: usize);
+
     // "Center" a vertex by minimizing the sum of errors of its edges
     fn center(&mut self, f: &Figure, v: usize, search_region: (Point, Point));
 
@@ -64,6 +67,23 @@ impl Transform for Pose {
             let q = p1 + a * a.dot(b) / (a.dot(a)) * 2f64 - b;
             p.x = q.x().round() as i64;
             p.y = q.y().round() as i64;
+        }
+    }
+
+    fn pull(&mut self, f: &Figure, v: usize) {
+        let p0 = self.vertices[v];
+        for &(e, v) in &f.vertex_edges[v] {
+            if f.test_edge_len2(e, self) != EdgeTestResult::Ok {
+                let p = self.vertices[v];
+                let mut vec =
+                    geomath::vector::Vector2::new((p.x - p0.x) as f64, (p.y - p0.y) as f64);
+                vec.set_rho(f.edges[e].len2.sqrt());
+                dbg!(vec.rho());
+                self.vertices[v] = Point {
+                    x: p0.x + vec.x as i64,
+                    y: p0.y + vec.y as i64,
+                }
+            }
         }
     }
 
