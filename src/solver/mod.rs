@@ -63,6 +63,10 @@ lazy_static! {
         map.insert("tree_search_30min".to_owned(), Box::new(tree_search::TreeSearchSolver{
             timeout: Some(std::time::Duration::from_secs(30 * 60)),
         }));
+        // Discrete tree with 60 minutes timeout.
+        map.insert("tree_search_60min".to_owned(), Box::new(tree_search::TreeSearchSolver{
+            timeout: Some(std::time::Duration::from_secs(60 * 60)),
+        }));
         map
     };
 }
