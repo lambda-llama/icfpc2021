@@ -139,6 +139,58 @@ impl Figure {
     pub fn to_float_point(p: Point) -> geo::Point<f64> {
         geo::Point::new(p.x as f64, p.y as f64)
     }
+
+    pub fn get_longest_edge_paths(&self, desired: &[f64]) -> Vec<Vec<usize>> {
+        dbg!(&desired);
+        let initial_set = {
+            let mut set = HashSet::new();
+            let first = desired[0];
+            for (i, e) in self.edges.iter().enumerate() {
+                let (min, max) = self.edge_len2_bounds(i);
+                if min <= first && first <= max {
+                    set.insert(e.v0);
+                    set.insert(e.v1);
+                }
+            }
+            set
+        };
+        if initial_set.is_empty() {
+            return vec![];
+        }
+
+        let mut paths = vec![];
+        for v in initial_set {
+            paths.push(vec![v]);
+        }
+        for &len in desired {
+            let mut good = vec![];
+            let mut bad = vec![];
+            for path in paths {
+                let last = path[path.len() - 1];
+                let mut any_good = false;
+                for &(e, v) in &self.vertex_edges[last] {
+                    let (min, max) = self.edge_len2_bounds(e);
+                    if min <= len && len <= max && !path.contains(&v) {
+                        let mut copy = path.clone();
+                        copy.push(v);
+                        good.push(copy);
+                        any_good = true;
+                    }
+                }
+                if !any_good {
+                    bad.push(path);
+                }
+            }
+            dbg!(good.len());
+            dbg!(bad.len());
+            if good.is_empty() {
+                paths = bad;
+                break;
+            }
+            paths = good;
+        }
+        paths.into_iter().filter(|p| p.len() > 1).collect()
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

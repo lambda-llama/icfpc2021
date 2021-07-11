@@ -31,7 +31,7 @@ struct GuiState {
     pub rotate_vertices_copy: Vec<Point>, // to avoid rounding errors with deltas
 
     // Highlighting
-    pub target_dist: Option<f64>,
+    pub paths: Vec<Vec<usize>>,
 
     // Problem browser
     pub problems: Vec<CString>,
@@ -62,7 +62,7 @@ impl GuiState {
             fold_points: HashSet::new(),
             rotate_pivot: None,
             rotate_vertices_copy: vec![],
-            target_dist: None,
+            paths: vec![],
             problems,
             problems_focus_idx: 0,
             problems_scroll_idx: 0,
@@ -81,7 +81,7 @@ impl GuiState {
         self.fold_points.clear();
         self.rotate_pivot = None;
         self.rotate_vertices_copy.clear();
-        self.target_dist = None;
+        self.paths.clear();
         Ok(problem)
     }
 
@@ -348,21 +348,23 @@ fn render_problem(d: &mut RaylibDrawHandle, state: &GuiState, problem: &Problem,
     // Edges
     for (idx, e) in problem.figure.edges.iter().enumerate() {
         let color = {
-            state
-                .target_dist
-                .and_then(|dist| {
-                    let (min, max) = problem.figure.edge_len2_bounds(idx);
-                    if min <= dist && dist <= max {
-                        Some(COLOR_EDGE_HIGHLIGHT)
-                    } else {
-                        None
+            let mut color = None;
+            for path in &state.paths {
+                let pos0 = path.iter().position(|&v| v == e.v0);
+                let pos1 = path.iter().position(|&v| v == e.v1);
+                match (pos0, pos1) {
+                    (Some(i), Some(j)) if (i as i32 - j as i32).abs() == 1 => {
+                        color = Some(COLOR_EDGE_HIGHLIGHT);
+                        break;
                     }
-                })
-                .unwrap_or_else(|| match problem.figure.test_edge_len2(idx, pose) {
-                    EdgeTestResult::Ok => COLOR_EDGE_OK,
-                    EdgeTestResult::TooShort => COLOR_EDGE_TOO_SHORT,
-                    EdgeTestResult::TooLong => COLOR_EDGE_TOO_LONG,
-                })
+                    _ => {}
+                }
+            }
+            color.unwrap_or_else(|| match problem.figure.test_edge_len2(idx, pose) {
+                EdgeTestResult::Ok => COLOR_EDGE_OK,
+                EdgeTestResult::TooShort => COLOR_EDGE_TOO_SHORT,
+                EdgeTestResult::TooLong => COLOR_EDGE_TOO_LONG,
+            })
         };
         d.draw_line_ex(
             state.translate(&pose.vertices[e.v0 as usize]),
@@ -479,49 +481,69 @@ pub fn interact<'a>(
 
         if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             let mouse_p = state.untranslate(&mouse_pos);
+            let mut continue_processing = true;
             if let Some(h_idx) = hit_test_hole(&problem, mouse_p, 2) {
-                let h_idx2 = (h_idx + 1) % problem.hole.len();
-                state.target_dist = Some(Figure::distance_squared(
-                    problem.hole[h_idx],
-                    problem.hole[h_idx2],
-                ));
-            }
-            let v_idx = hit_test_point(&pose.borrow(), mouse_p, 2);
-            if rh.is_key_down(KeyboardKey::KEY_R) {
-                state.rotate_pivot = Some(mouse_p);
-                state.rotate_vertices_copy = pose.borrow().vertices.clone();
-            } else if rh.is_key_down(KeyboardKey::KEY_W) {
-                if let Some(idx) = v_idx {
-                    if state.fold_points.contains(&idx) {
-                        state.fold_points.remove(&idx);
-                    } else {
-                        if state.fold_points.len() < 2 {
-                            state.fold_points.insert(idx);
-                        } else {
-                            let mut points = state.fold_points.iter().cloned().collect::<Vec<_>>();
-                            points.sort_unstable();
-                            pose.borrow_mut()
-                                .fold(&problem.figure, points[0], points[1], idx);
-                            state.fold_points.clear();
-                        }
+                let mut desired = vec![];
+                for i in 0..problem.hole.len() {
+                    let h1 = (h_idx + i) % problem.hole.len();
+                    let h2 = (h_idx + i + 1) % problem.hole.len();
+                    desired.push(Figure::distance_squared(problem.hole[h1], problem.hole[h2]));
+                }
+                state.paths = problem.figure.get_longest_edge_paths(&desired);
+                state.selected_points.clear();
+                for path in &state.paths {
+                    for v in path {
+                        state.selected_points.insert(*v);
                     }
                 }
-            } else {
-                state.dragged_point = v_idx;
-                if let Some(idx) = v_idx {
-                    if !rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT)
-                        && !rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
-                        && !state.selected_points.contains(&idx)
-                    {
-                        state.selected_points.clear();
+                if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) && state.paths.len() > 0 {
+                    for (i, &v_idx) in state.paths[0].iter().enumerate() {
+                        pose.borrow_mut().vertices[v_idx] =
+                            problem.hole[(h_idx + i) % problem.hole.len()];
                     }
-                    if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) {
-                        state.selected_points.remove(&idx);
-                    } else {
-                        state.selected_points.insert(idx);
+                    state.paths.clear();
+                    continue_processing = false;
+                }
+            }
+            if continue_processing {
+                let v_idx = hit_test_point(&pose.borrow(), mouse_p, 2);
+                if rh.is_key_down(KeyboardKey::KEY_R) {
+                    state.rotate_pivot = Some(mouse_p);
+                    state.rotate_vertices_copy = pose.borrow().vertices.clone();
+                } else if rh.is_key_down(KeyboardKey::KEY_W) {
+                    if let Some(idx) = v_idx {
+                        if state.fold_points.contains(&idx) {
+                            state.fold_points.remove(&idx);
+                        } else {
+                            if state.fold_points.len() < 2 {
+                                state.fold_points.insert(idx);
+                            } else {
+                                let mut points =
+                                    state.fold_points.iter().cloned().collect::<Vec<_>>();
+                                points.sort_unstable();
+                                pose.borrow_mut()
+                                    .fold(&problem.figure, points[0], points[1], idx);
+                                state.fold_points.clear();
+                            }
+                        }
                     }
                 } else {
-                    state.selection_pos = Some(mouse_pos);
+                    state.dragged_point = v_idx;
+                    if let Some(idx) = v_idx {
+                        if !rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT)
+                            && !rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL)
+                            && !state.selected_points.contains(&idx)
+                        {
+                            state.selected_points.clear();
+                        }
+                        if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) {
+                            state.selected_points.remove(&idx);
+                        } else {
+                            state.selected_points.insert(idx);
+                        }
+                    } else {
+                        state.selection_pos = Some(mouse_pos);
+                    }
                 }
             }
         } else if rh.is_mouse_button_pressed(MouseButton::MOUSE_RIGHT_BUTTON) {
