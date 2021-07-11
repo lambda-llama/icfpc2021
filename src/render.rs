@@ -205,7 +205,7 @@ fn render_gui(
     const HELP_BAR_HEIGHT: f32 = 51.0;
     let mut text = b"\
 Tools: E - Center illegal, Shift+E - Center all, C - Flip horz, V - Flip vert, W - Fold (hold), R - Rotate (hold)\n\
-Selection/Navigation: Ctrl+A - Select all, Shift adds, Ctrl removes, RMB - Drag viewport, Scrollwheel - Zoom
+Selection/Navigation: Ctrl+A - Select all, Shift adds, Ctrl removes, Z - Select adjacent, RMB - Drag viewport, Scrollwheel - Zoom
 Misc: S - Save, D - Step solver, F - Run solver, Ctrl+L - Reset solution\n\
 "
     .to_owned();
@@ -667,6 +667,14 @@ pub fn interact<'a>(
                     for idx in points {
                         pose.borrow_mut()
                             .center(&problem.figure, idx, problem.bounding_box());
+                    }
+                }
+                KeyboardKey::KEY_Z => {
+                    let existing_points = state.selected_points.clone();
+                    for idx in existing_points {
+                        for &(_e, v) in &problem.figure.vertex_edges[idx] {
+                            state.selected_points.insert(v);
+                        }
                     }
                 }
                 KeyboardKey::KEY_C => {
