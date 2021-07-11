@@ -436,9 +436,6 @@ impl<'a> SearchRunner<'a> {
                 x: parent_pos.x + dx,
                 y: parent_pos.y + dy,
             };
-            if self.pose.vertices[v].x < 0 || self.pose.vertices[v].y < 0 {
-                continue;
-            }
             if !problem.contains_point(&self.pose.vertices[v])
                 || !self.check_back_edges_within_hole(index, problem, back_edges)
             {
