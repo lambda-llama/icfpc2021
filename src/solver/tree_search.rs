@@ -28,7 +28,7 @@ impl Solver for TreeSearchSolver {
             s.yield_(pose.clone());
 
             let figure_size = problem.figure.vertices.len();
-            if figure_size > 50 {
+            if figure_size > 100 {
                 done!();
             }
 
@@ -36,13 +36,16 @@ impl Solver for TreeSearchSolver {
 
             let mut start_vertex = 1;
             // Find min degree vertex.
-            // for i in 0..figure_size {
-            //     if problem.figure.vertex_edges[i].len()
-            //         < problem.figure.vertex_edges[start_vertex].len()
-            //     {
-            //         start_vertex = i;
-            //     }
-            // }
+            for i in 0..figure_size {
+                // if problem.figure.vertex_edges[i].len()
+                //     < problem.figure.vertex_edges[start_vertex].len()
+                // {
+                //     start_vertex = i;
+                // }
+                if problem.figure.vertex_edges[i].len() == 2 {
+                    start_vertex = i;
+                }
+            }
 
             let mut order = Vec::new();
             let mut v_in_order = vec![0; figure_size];
@@ -208,8 +211,6 @@ impl Solver for TreeSearchSolver {
             let mut runner = SearchRunner {
                 order,
                 placed: vec![false; figure_size],
-                delta_choice: vec![555555; figure_size],
-                parents,
                 pose: pose.borrow().clone(),
                 best_dislikes: None,
                 last_log_time: std::time::Instant::now(),
@@ -324,9 +325,7 @@ struct SearchRunner<'a> {
     // Whether vertex is already placed.
     order: Vec<usize>,
     placed: Vec<bool>,
-    delta_choice: Vec<usize>,
     // Parent of the vertex in topsort order.
-    parents: Vec<(usize, usize)>,
     pose: Pose,
     best_dislikes: Option<u64>,
     last_log_time: std::time::Instant,
@@ -443,6 +442,7 @@ impl<'a> SearchRunner<'a> {
             // }
 
             let mut can_continue_placement = true;
+            let mut break_point = 0;
             for &(e_id, dst) in forward_edges[v].iter() {
                 edges_consumed[dst] += 1;
                 let mut fill_places_list = false;
@@ -483,7 +483,8 @@ impl<'a> SearchRunner<'a> {
 
                 if valid_placements == 0 {
                     can_continue_placement = false;
-                    // TODO: Can't break early for now, need to complete incremental update.
+                    break_point = e_id;
+                    break;
                 }
             }
             if can_continue_placement {
@@ -572,6 +573,10 @@ impl<'a> SearchRunner<'a> {
                         can_place_in[dst][(p_dst.0 - self.bbox_mn.x) as usize]
                             [(p_dst.1 - self.bbox_mn.y) as usize] -= 1;
                     }
+                }
+
+                if !can_continue_placement && e_id == break_point {
+                    break;
                 }
             }
         }
