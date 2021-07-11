@@ -122,97 +122,34 @@ impl Solver for TreeSearchSolver {
                 info!("Vectex {} degree: {}", v, vertex_deltas[v].len());
             }
 
-            // Each cycle is a sequence of (destination_vertex, edge_index_leading_to_it).
-            let mut vertex_cycles: Vec<Vec<Vec<(usize, usize)>>> =
-                vec![vec![Vec::new(); 0]; figure_size];
-            let mut path: Vec<(usize, usize)> = Vec::new();
-            for v in 0..figure_size {
-                find_cycles(
-                    v,
-                    v,
-                    &problem.figure.vertex_edges,
-                    &topo_vertex_edges,
-                    &mut path,
-                    &mut vertex_cycles[v],
-                    6,
-                );
-                info!("Vectex {} cycles: {}", v, vertex_cycles[v].len());
-            }
-
-            let mut vertex_deltas_per_parent_choice: Vec<Vec<Vec<(i64, i64)>>> =
-                vec![vec![Vec::new(); 0]; figure_size];
-            for v in 0..figure_size {
-                for cycle in &vertex_cycles[v] {
-                    // For now only handling cycles of length 3.
-                    if cycle.len() == 3 {
-                        let v1 = cycle[0].0;
-                        let v2 = cycle[1].0;
-                        let back_edge_index = cycle[2].1;
-
-                        // Find feasible deltas.
-                        let mut delta_v1_is_feasible = vec![false; vertex_deltas[v1].len()];
-                        let mut delta_v2_is_feasible = vec![false; vertex_deltas[v2].len()];
-                        for (delta_v1_idx, delta_v1) in vertex_deltas[v1].iter().enumerate() {
-                            vertex_deltas_per_parent_choice[v2].push(Vec::new());
-                            for (delta_v2_idx, delta_v2) in vertex_deltas[v2].iter().enumerate() {
-                                let mut deltas_are_feasible = false;
-                                let delta = (delta_v1.0 + delta_v2.0, delta_v1.1 + delta_v2.1);
-                                // TODO: Replace this check with a lookup to a hashtable.
-                                let parent_bounds = &edge_precalc[back_edge_index];
-                                for parent_d in parent_bounds.0..=parent_bounds.1 {
-                                    for back_delta in delta_precalc[parent_d as usize].iter() {
-                                        if delta.0 + back_delta.0 == 0
-                                            && delta.1 + back_delta.1 == 0
-                                        {
-                                            deltas_are_feasible = true;
-                                            break;
-                                        }
-                                    }
-                                    if deltas_are_feasible {
-                                        break;
-                                    }
-                                }
-
-                                if deltas_are_feasible {
-                                    delta_v1_is_feasible[delta_v1_idx] = true;
-                                    delta_v2_is_feasible[delta_v2_idx] = true;
-                                    // If parent edge chooses delta_v1_idx we can chose delta_v2.
-                                    vertex_deltas_per_parent_choice[v2][delta_v1_idx]
-                                        .push(*delta_v2);
-                                }
-                            }
-                        }
-                        // Narrow down vertex deltas to feasible ones for v1.
-                        let mut new_v1_deltas = Vec::new();
-                        for (delta_v1_idx, delta_v1) in vertex_deltas[v1].iter().enumerate() {
-                            if delta_v1_is_feasible[delta_v1_idx] {
-                                new_v1_deltas.push(*delta_v1);
-                            }
-                        }
-                        vertex_deltas[v1] = new_v1_deltas;
-                        // Narrow down vertex deltas to feasible ones for v2.
-                        let mut new_v2_deltas = Vec::new();
-                        for (delta_v2_idx, delta_v2) in vertex_deltas[v2].iter().enumerate() {
-                            if delta_v2_is_feasible[delta_v2_idx] {
-                                new_v2_deltas.push(*delta_v2);
-                            }
-                        }
-                        vertex_deltas[v2] = new_v2_deltas;
-                    }
-                }
-            }
-
-            for v in 0..figure_size {
-                // Starting vertex has no parent, so skipping for now.
-                if v == start_vertex {
-                    continue;
-                }
-                info!(
-                    "Vectex {} degree after pruning: {}",
-                    v,
-                    vertex_deltas[v].len()
-                );
-            }
+//             // Each cycle is a sequence of (destination_vertex, edge_index_leading_to_it).
+//             let mut vertex_cycles: Vec<Vec<Vec<(usize, usize)>>> =
+//                 vec![vec![Vec::new(); 0]; figure_size];
+//             let mut path: Vec<(usize, usize)> = Vec::new();
+//             for v in 0..figure_size {
+//                 find_cycles(
+//                     v,
+//                     v,
+//                     &problem.figure.vertex_edges,
+//                     &topo_vertex_edges,
+//                     &mut path,
+//                     &mut vertex_cycles[v],
+//                     6,
+//                 );
+//                 info!("Vectex {} cycles: {}", v, vertex_cycles[v].len());
+//             }
+// 
+//             for v in 0..figure_size {
+//                 // Starting vertex has no parent, so skipping for now.
+//                 if v == start_vertex {
+//                     continue;
+//                 }
+//                 info!(
+//                     "Vectex {} degree after pruning: {}",
+//                     v,
+//                     vertex_deltas[v].len()
+//                 );
+//             }
 
             let precalc_time_taken = std::time::Instant::now() - precalc_start;
             info!(
@@ -224,7 +161,7 @@ impl Solver for TreeSearchSolver {
             let mut runner = SearchRunner {
                 order,
                 placed: vec![false; figure_size],
-                delta_choice: vec![10000000; figure_size],
+                delta_choice: vec![555555; figure_size],
                 parents,
                 pose: pose.borrow().clone(),
                 best_dislikes: None,
@@ -250,7 +187,6 @@ impl Solver for TreeSearchSolver {
                             1,
                             &problem,
                             &vertex_deltas,
-                            &vertex_deltas_per_parent_choice,
                             &edge_precalc,
                             &back_edges,
                             &deadline,
@@ -380,7 +316,6 @@ impl<'a> SearchRunner<'a> {
         index: usize,
         problem: &Problem,
         vertex_deltas: &Vec<Vec<(i64, i64)>>,
-        vertex_deltas_per_parent_choice: &Vec<Vec<Vec<(i64, i64)>>>,
         edge_precalc: &Vec<(i64, i64)>,
         back_edges: &Vec<Vec<(usize, usize)>>,
         deadline: &Option<std::time::Instant>,
@@ -425,11 +360,11 @@ impl<'a> SearchRunner<'a> {
 
         let v = self.order[index];
         // self.placed[v] = true;
-        let (parent, parent_edge_index) = self.parents[v];
+        let (parent, _) = self.parents[v];
         let parent_pos = self.pose.vertices[parent];
         let mut best_result = None;
 
-        for (dx, dy) in &vertex_deltas[v] {
+        for (idx, (dx, dy)) in vertex_deltas[v].iter().enumerate() {
             // Place vertex `v`.
             // We attach it to one of the previously placed vertices.
             self.pose.vertices[v] = Point {
@@ -464,11 +399,11 @@ impl<'a> SearchRunner<'a> {
                 continue;
             }
 
+            self.delta_choice[v] = idx;
             if let Some(new_dislikes) = self.place_vertices(
                 index + 1,
                 problem,
                 vertex_deltas,
-                vertex_deltas_per_parent_choice,
                 edge_precalc,
                 back_edges,
                 deadline,
