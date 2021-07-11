@@ -18,7 +18,7 @@ pub struct TreeSearchSolver {
 impl Solver for TreeSearchSolver {
     fn solve_gen<'a>(
         &self,
-        problem: Problem,
+        mut problem: Problem,
         pose: Rc<RefCell<Pose>>,
     ) -> generator::LocalGenerator<'a, (), Rc<RefCell<Pose>>> {
         let deadline = match self.timeout {
@@ -64,6 +64,7 @@ impl Solver for TreeSearchSolver {
             }
 
             let precalc_start = std::time::Instant::now();
+            problem.precalc();
             let mut max_delta: usize = 0;
             for &p1 in &problem.hole {
                 for &p2 in &problem.hole {
@@ -346,6 +347,21 @@ struct SearchRunner<'a> {
 }
 
 impl<'a> SearchRunner<'a> {
+    fn check_back_edges_within_hole(
+        &self,
+        index: usize,
+        problem: &Problem,
+        back_edges: &Vec<Vec<(usize, usize)>>,
+    ) -> bool {
+        let v = self.order[index];
+        for &(_, u) in &back_edges[v] {
+            if !problem.contains_segment((self.pose.vertices[u], self.pose.vertices[v])) {
+                return false
+            }
+        }
+        true
+    }
+
     fn place_vertices(
         &mut self,
         index: usize,
@@ -379,9 +395,9 @@ impl<'a> SearchRunner<'a> {
         debug!("Placing vertex {}", index);
         if index == problem.figure.vertices.len() {
             // TODO: Make this incremental.
-            if !problem.contains(&self.pose) {
-                return None;
-            }
+            // if !problem.contains(&self.pose) {
+            //     return None;
+            // }
 
             let dislikes = problem.dislikes(&self.pose);
 
@@ -411,7 +427,8 @@ impl<'a> SearchRunner<'a> {
                 if self.pose.vertices[v].x < 0 || self.pose.vertices[v].y < 0 {
                     continue;
                 }
-                if !problem.contains_point(&self.pose.vertices[v]) {
+                if !problem.contains_point(&self.pose.vertices[v]) ||
+                   !self.check_back_edges_within_hole(index, problem, back_edges) {
                     continue;
                 }
 

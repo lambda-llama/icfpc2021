@@ -53,11 +53,12 @@ fn is_point_belongs_to_poly(poly: &geo::Polygon<f64>, p: Point) -> bool {
 }
 
 fn is_segment_belongs_to_poly(poly: &geo::Polygon<f64>, (a, b): (Point, Point)) -> bool {
+    if a == b {
+        return is_point_belongs_to_poly(poly, a);
+    }
     let s = geo::LineString::from(vec![a.convert(), b.convert()]);
-    let polygon_points = poly.exterior().clone().into_points();
     let mut boundary_countains = false;
-    for i in 0..polygon_points.len() - 1 {
-        let t = geo::LineString::from(vec![polygon_points[i], polygon_points[i + 1]]);
+    for t in poly.exterior().lines() {
         if t.contains(&s) {
             boundary_countains = true;
         }
@@ -240,6 +241,7 @@ pub struct Problem {
     bbox_min: Point,
     bbox_max: Point,
     inside_segments: HashSet<(Point, Point)>,
+    precalced: bool,
     pub figure: Figure,
     pub bonuses: Vec<BonusUnlock>,
 }
@@ -256,38 +258,45 @@ impl Problem {
             .collect();
         border.push(border[0]);
         let poly = geo::Polygon::new(geo::LineString::from(border), vec![]);
-
         let (mn, mx) = bounding_box(&hole);
-        let mut inside_points =
-            vec![vec![false; (mx.y - mn.y) as usize + 1]; (mx.x - mn.x) as usize + 1];
-        let mut inside_segments = HashSet::new();
-        for x in mn.x..=mx.x {
-            for y in mn.y..=mx.y {
-                let p = Point { x, y };
-                if is_point_belongs_to_poly(&poly, p) {
-                    inside_points[(p.x - mn.x) as usize][(p.y - mn.y) as usize] = true;
-                    // TODO: Currently it slows down startup of the render mode. We need to do it in a lazy way.
-                    // for &q in &inside_points {
-                    //     if is_segment_belongs_to_poly(&poly, (p, q)) {
-                    //         inside_segments.insert((p, q));
-                    //     }
-                    // }
-                    // inside_points.insert(p);
-                }
-            }
-        }
 
         Self {
             id,
             hole,
             poly,
-            inside_points,
+            inside_points: Vec::new(),
             bbox_min: mn,
             bbox_max: mx,
-            inside_segments,
+            inside_segments: HashSet::new(),
+            precalced: false,
             figure,
             bonuses,
         }
+    }
+
+    pub fn precalc(&mut self) {
+        if self.precalced {
+            return;
+        }
+        self.inside_points = 
+            vec![vec![false; (self.bbox_max.y - self.bbox_min.y) as usize + 1]; (self.bbox_max.x - self.bbox_min.x) as usize + 1];
+        let mut inside_points_vec = Vec::new();
+        for x in self.bbox_min.x..=self.bbox_max.x {
+            for y in self.bbox_min.y..=self.bbox_max.y {
+                let p = Point { x, y };
+                if is_point_belongs_to_poly(&self.poly, p) {
+                    self.inside_points[(p.x - self.bbox_min.x) as usize][(p.y - self.bbox_min.y) as usize] = true;
+                    // TODO: Currently it slows down startup of the render mode. We need to do it in a lazy way.
+                    for &q in &inside_points_vec {
+                        if is_segment_belongs_to_poly(&self.poly, (p, q)) {
+                            self.inside_segments.insert((p, q));
+                        }
+                    }
+                    inside_points_vec.push(p);
+                }
+            }
+        }
+        self.precalced = true;
     }
 
     pub fn from_json(id: u32, data: &[u8]) -> Result<Self> {
@@ -365,6 +374,8 @@ impl Problem {
     }
 
     pub fn contains_point(&self, p: &Point) -> bool {
+        assert!(self.precalced);
+
         if p.x < self.bbox_min.x
             || p.x > self.bbox_max.x
             || p.y < self.bbox_min.y
@@ -376,6 +387,11 @@ impl Problem {
     }
 
     pub fn contains_segment(&self, (a, b): (Point, Point)) -> bool {
+        assert!(self.precalced);
+        if a == b {
+            return self.contains_point(&a);
+        }
+
         self.inside_segments.contains(&(a, b)) || self.inside_segments.contains(&(b, a))
     }
 
