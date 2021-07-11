@@ -57,10 +57,24 @@ impl Solver for TreeSearchSolver {
             }
 
             let precalc_start = std::time::Instant::now();
-            let mut delta_precalc: Vec<Vec<(i64, i64)>> = vec![Vec::new(); 2 * 100 * 100 + 1];
-            for dx in 0..=100i64 {
-                for dy in 0..=100i64 {
+            let mut max_delta: usize = 0;
+            for &p1 in &problem.hole {
+                for &p2 in &problem.hole {
+                    max_delta = std::cmp::max(
+                        max_delta,
+                        Figure::distance_squared_int(p1, p2) as usize,
+                    );
+                }
+            }
+            info!("Max delta: {}", max_delta);
+            let mut delta_precalc: Vec<Vec<(i64, i64)>> = vec![Vec::new(); max_delta + 1];
+            let delta_sqrt = ((max_delta as f64).sqrt().ceil()) as i64 + 5;
+            for dx in 0..=delta_sqrt {
+                for dy in 0..=delta_sqrt {
                     let delta = (dx * dx + dy * dy) as usize;
+                    if delta > max_delta {
+                        break;
+                    }
                     delta_precalc[delta].push((-dx, dy));
                     delta_precalc[delta].push((-dx, -dy));
                     delta_precalc[delta].push((dx, dy));
@@ -70,12 +84,6 @@ impl Solver for TreeSearchSolver {
             for v in delta_precalc.iter_mut() {
                 v.dedup();
             }
-            let precalc_time_taken = std::time::Instant::now() - precalc_start;
-            info!(
-                "Precalc duration: {}.{}s",
-                precalc_time_taken.as_secs(),
-                precalc_time_taken.subsec_millis()
-            );
 
             let mut edge_precalc: Vec<(i64, i64)> = Vec::new();
             for edge_index in 0..problem.figure.edges.len() {
@@ -91,6 +99,13 @@ impl Solver for TreeSearchSolver {
                     }
                 }
             }
+
+            let precalc_time_taken = std::time::Instant::now() - precalc_start;
+            info!(
+                "Precalc duration: {}.{}s",
+                precalc_time_taken.as_secs(),
+                precalc_time_taken.subsec_millis()
+            );
 
             let mut runner = SearchRunner {
                 order,
