@@ -27,10 +27,11 @@ pub trait Solver: Sync {
             .last()
             .unwrap()
             .take();
+        let dislikes = problem.dislikes(&pose);
         let state = SolutionState {
-            dislikes: problem.dislikes(&pose),
+            dislikes,
             valid: problem.validate(&pose),
-            optimal: false, // TODO
+            optimal: dislikes == 0,
         };
         Solution {
             id,
