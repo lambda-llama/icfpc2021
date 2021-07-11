@@ -170,6 +170,7 @@ pub struct BonusUnlock {
 
 #[derive(Clone, Debug)]
 pub struct Problem {
+    pub id: u32,
     pub hole: Vec<Point>,
     pub poly: geo::Polygon<f64>,
     inside_points: Vec<Vec<bool>>,
@@ -181,7 +182,7 @@ pub struct Problem {
 }
 
 impl Problem {
-    pub fn new(hole: Vec<Point>, figure: Figure, bonuses: Vec<BonusUnlock>) -> Self {
+    pub fn new(id: u32, hole: Vec<Point>, figure: Figure, bonuses: Vec<BonusUnlock>) -> Self {
         let mut border: Vec<geo::Coordinate<f64>> = hole
             .clone()
             .into_iter()
@@ -214,18 +215,19 @@ impl Problem {
         }
 
         Self {
-            hole: hole,
-            poly: poly,
-            inside_points: inside_points,
+            id,
+            hole,
+            poly,
+            inside_points,
             bbox_min: mn,
             bbox_max: mx,
-            inside_segments: inside_segments,
-            figure: figure,
+            inside_segments,
+            figure,
             bonuses,
         }
     }
 
-    pub fn from_json(data: &[u8]) -> Result<Self> {
+    pub fn from_json(id: u32, data: &[u8]) -> Result<Self> {
         let RawProblem {
             hole,
             figure: RawFigure { vertices, edges },
@@ -258,6 +260,7 @@ impl Problem {
             })
             .collect();
         Ok(Problem::new(
+            id,
             hole.into_iter()
                 .map(|p| Point { x: p[0], y: p[1] })
                 .collect(),
@@ -430,8 +433,29 @@ impl Pose {
     }
 }
 
+#[derive(Deserialize, Serialize)]
+pub struct ServerState {
+    pub dislikes: u64,
+}
+
+impl ServerState {
+    pub fn new() -> Self {
+        ServerState { dislikes: u64::MAX }
+    }
+
+    pub fn from_json(data: &[u8]) -> Result<Self> {
+        Ok(serde_json::from_slice(data)?)
+    }
+
+    pub fn to_json(&self) -> Result<String> {
+        Ok(serde_json::to_string(&self)?)
+    }
+}
+
+#[derive(Deserialize, Serialize)]
 pub struct SolutionState {
     pub dislikes: u64,
+    pub valid: bool,
     pub optimal: bool,
 }
 
@@ -439,24 +463,17 @@ impl SolutionState {
     pub fn new() -> Self {
         SolutionState {
             dislikes: u64::MAX,
+            valid: false,
             optimal: false,
         }
     }
 
     pub fn from_json(data: &[u8]) -> Result<Self> {
-        let RawSolutionState { dislikes, optimal } = serde_json::from_slice(data)?;
-        Ok(SolutionState {
-            dislikes,
-            optimal: optimal || dislikes == 0, // the "optimal" field is optional for 0-dislike solutions
-        })
+        Ok(serde_json::from_slice(data)?)
     }
 
     pub fn to_json(&self) -> Result<String> {
-        let solution_state = RawSolutionState {
-            dislikes: self.dislikes,
-            optimal: self.optimal,
-        };
-        Ok(serde_json::to_string(&solution_state)?)
+        Ok(serde_json::to_string(&self)?)
     }
 }
 
@@ -464,6 +481,7 @@ pub struct Solution {
     pub id: u32,
     pub pose: Pose,
     pub state: SolutionState,
+    pub server_state: ServerState,
 }
 
 // Serialization helper types below
@@ -500,11 +518,4 @@ struct RawBonusUnlock {
 struct RawBonusUse {
     pub bonus: String,
     pub problem: u32,
-}
-
-#[derive(Deserialize, Serialize)]
-struct RawSolutionState {
-    pub dislikes: u64,
-    #[serde(default)]
-    pub optimal: bool,
 }

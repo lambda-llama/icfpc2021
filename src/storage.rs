@@ -21,37 +21,60 @@ pub fn get_problems_count() -> u32 {
 }
 
 pub fn load_problem(id: u32) -> Result<Problem> {
-    Problem::from_json(&std::fs::read(
-        PROBLEMS_PATH.join(format!("{}.problem", id)),
-    )?)
+    Problem::from_json(
+        id,
+        &std::fs::read(PROBLEMS_PATH.join(format!("{}.problem", id)))?,
+    )
 }
 
 pub fn load_solution(id: u32) -> Result<Option<Solution>> {
     let path = SOLUTIONS_PATH.join(format!("{}.solution", id));
-    let state_path = SOLUTIONS_PATH.join(format!("{}.state", id));
-    if !path.exists() {
+    let state_path = SOLUTIONS_PATH.join(format!("{}.meta", id));
+    if !path.exists() || !state_path.exists() {
         return Ok(None);
     }
-    let pose = Pose::from_json(&std::fs::read(path)?)?;
-    if !state_path.exists() {
-        warn!("No state file for {}.solution", id);
-        return Ok(Some(Solution {
-            id,
-            pose,
-            state: SolutionState::new(),
-        }));
-    }
-    let state = SolutionState::from_json(&std::fs::read(state_path)?)?;
-    Ok(Some(Solution { id, pose, state }))
+    Ok(Some(Solution {
+        id,
+        pose: Pose::from_json(&std::fs::read(path)?)?,
+        state: SolutionState::from_json(&std::fs::read(state_path)?)?,
+        server_state: load_server_state(id)?,
+    }))
+}
+
+pub fn save_solution(solution: &Solution, subfolder: Option<&str>) -> Result<()> {
+    let solutions_path = match subfolder {
+        Some(s) => SOLUTIONS_PATH.join(s),
+        None => SOLUTIONS_PATH.to_owned(),
+    };
+    std::fs::write(
+        &solutions_path.join(format!("{}.solution", solution.id)),
+        solution.pose.to_json()?,
+    )?;
+    std::fs::write(
+        solutions_path.join(format!("{}.meta", solution.id)),
+        solution.state.to_json()?,
+    )?;
+    Ok(())
 }
 
 pub fn load_custom_solution(path: &Path) -> Result<Pose> {
     Ok(Pose::from_json(&std::fs::read(path)?)?)
 }
 
-pub fn save_solution_state(solution: &Solution) -> Result<()> {
+pub fn load_server_state(id: u32) -> Result<ServerState> {
+    let server_state_path = SOLUTIONS_PATH.join(format!("{}.state", id));
+    if server_state_path.exists() {
+        ServerState::from_json(&std::fs::read(
+            SOLUTIONS_PATH.join(format!("{}.state", id)),
+        )?)
+    } else {
+        Ok(ServerState::new())
+    }
+}
+
+pub fn save_server_state(id: u32, state: &ServerState) -> Result<()> {
     Ok(std::fs::write(
-        SOLUTIONS_PATH.join(format!("{}.state", solution.id)),
-        solution.state.to_json()?,
+        SOLUTIONS_PATH.join(format!("{}.state", id)),
+        state.to_json()?,
     )?)
 }

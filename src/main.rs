@@ -1,7 +1,6 @@
 use clap::App;
 use clap::Arg;
 use log::LevelFilter;
-use problem::Problem;
 use render::interact;
 use simplelog::{ColorChoice, Config, TerminalMode};
 
@@ -52,7 +51,7 @@ fn main() -> Result<()> {
                 .arg("<PATH> path/to/N.problem"),
         )
         .subcommand(App::new("upload_all"))
-        .subcommand(App::new("stats").arg("<INPUT> path/to/problems"));
+        .subcommand(App::new("stats"));
 
     let app_matches = app.get_matches();
 
@@ -112,46 +111,36 @@ fn main() -> Result<()> {
         }
         Some(("upload_all", _matches)) => {
             for i in 1..=storage::get_problems_count() {
-                let problem = storage::load_problem(i)?;
                 let solution = storage::load_solution(i)?;
-                match solution {
-                    None => {
-                        info!("No solution for problem {}", i);
+                if let Some(mut s) = solution {
+                    if !s.state.valid {
+                        warn!("For problem {} solution does not fit into the hole", i);
                         continue;
                     }
-                    Some(mut s) => {
-                        if !problem.validate(&s.pose) {
-                            warn!("For problem {} solution does not fit into the hole", i);
-                            continue;
-                        }
-                        let dislikes = problem.dislikes(&s.pose);
-                        if s.state.dislikes == dislikes {
-                            info!(
-                                "For problem {} solution with same score {} was already submitted",
-                                i, dislikes
-                            );
-                            continue;
-                        }
-
-                        warn!(
-                            "Uploading solution for problem {}, dislikes: {}",
-                            i, dislikes
+                    if s.state.dislikes >= s.server_state.dislikes {
+                        info!(
+                            "For problem {} solution with same or higher score {} was already submitted (server has {})",
+                            i, s.state.dislikes, s.server_state.dislikes
                         );
-                        portal::SESSION.upload_solution(i as u64, &s.pose)?;
-                        s.state.dislikes = dislikes;
-                        storage::save_solution_state(&s)?;
+                        continue;
                     }
+
+                    warn!(
+                        "Uploading solution for problem {}, dislikes: {}",
+                        i, s.state.dislikes
+                    );
+                    portal::SESSION.upload_solution(i as u64, &s.pose)?;
+                    s.server_state.dislikes = s.state.dislikes;
+                    storage::save_server_state(i, &s.server_state)?;
+                } else {
+                    info!("No solution for problem {}", i);
                 }
             }
         }
-        Some(("stats", matches)) => {
-            let problems_path = std::path::Path::new(matches.value_of("INPUT").unwrap());
+        Some(("stats", _matches)) => {
             // NOTE: we're assuming the files are named N.problem as this allows to iterate them in order
-            let count = problems_path.read_dir()?.count();
-            for i in 1..=count {
-                let problem = Problem::from_json(&std::fs::read(
-                    problems_path.join(format!("{}.problem", i)),
-                )?)?;
+            for i in 1..=storage::get_problems_count() {
+                let problem = storage::load_problem(i)?;
                 println!("Problem {}: ", i);
                 println!("  Hole: {} vertices", problem.hole.len());
                 println!(

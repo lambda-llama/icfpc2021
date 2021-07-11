@@ -7,7 +7,7 @@ mod jammer;
 mod tree_search;
 mod wave;
 
-use crate::problem::{Pose, Problem};
+use crate::{problem::*, storage};
 
 pub trait Solver: Sync {
     fn solve_gen<'a>(
@@ -16,18 +16,28 @@ pub trait Solver: Sync {
         pose: Rc<RefCell<Pose>>,
     ) -> generator::LocalGenerator<'a, (), Rc<RefCell<Pose>>>;
 
-    fn solve(&self, problem: Problem) -> Pose {
-        let vertices = problem.figure.vertices.clone();
-        self.solve_gen(
-            problem,
-            Rc::new(RefCell::new(Pose {
-                vertices,
-                bonuses: vec![],
-            })),
-        )
-        .last()
-        .unwrap()
-        .take()
+    fn solve(&self, problem: Problem) -> Solution {
+        let id = problem.id;
+        let initial_pose = Pose {
+            vertices: problem.figure.vertices.clone(),
+            bonuses: vec![],
+        };
+        let pose = self
+            .solve_gen(problem.clone(), Rc::new(RefCell::new(initial_pose)))
+            .last()
+            .unwrap()
+            .take();
+        let state = SolutionState {
+            dislikes: problem.dislikes(&pose),
+            valid: problem.validate(&pose),
+            optimal: false, // TODO
+        };
+        Solution {
+            id,
+            pose,
+            state,
+            server_state: storage::load_server_state(id).expect("Failed to read server state"),
+        }
     }
 }
 
