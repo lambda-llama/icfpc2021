@@ -18,15 +18,14 @@ pub fn run(solver_name: Option<&str>, id: Option<u32>) -> Result<()> {
         .map(|i| -> Result<()> {
             let mut stdout = String::new();
             let problem = storage::load_problem(i)?;
-            let solution = storage::load_solution(i)?;
-            let mut best_dislikes = solution
+            let current_solution_state = storage::load_solution(i)?
                 .map(|s| s.state)
-                .unwrap_or(SolutionState::new())
-                .dislikes;
-            if best_dislikes == 0 {
+                .unwrap_or(SolutionState::new());
+            if current_solution_state.optimal {
                 warn!("Skipping problem {} as it's been solved optimally", i);
                 return Ok(());
             }
+            let mut best_dislikes = current_solution_state.dislikes;
             stdout += &format!("Problem {}\n", i);
             for &name in &solver_names {
                 let solver_solutions_path = storage::SOLUTIONS_PATH.join(name);

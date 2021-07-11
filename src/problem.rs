@@ -432,21 +432,29 @@ impl Pose {
 
 pub struct SolutionState {
     pub dislikes: u64,
+    pub optimal: bool,
 }
 
 impl SolutionState {
     pub fn new() -> Self {
-        SolutionState { dislikes: u64::MAX }
+        SolutionState {
+            dislikes: u64::MAX,
+            optimal: false,
+        }
     }
 
     pub fn from_json(data: &[u8]) -> Result<Self> {
-        let RawSolutionState { dislikes } = serde_json::from_slice(data)?;
-        Ok(SolutionState { dislikes })
+        let RawSolutionState { dislikes, optimal } = serde_json::from_slice(data)?;
+        Ok(SolutionState {
+            dislikes,
+            optimal: optimal || dislikes == 0, // the "optimal" field is optional for 0-dislike solutions
+        })
     }
 
     pub fn to_json(&self) -> Result<String> {
         let solution_state = RawSolutionState {
             dislikes: self.dislikes,
+            optimal: self.optimal,
         };
         Ok(serde_json::to_string(&solution_state)?)
     }
@@ -497,4 +505,6 @@ struct RawBonusUse {
 #[derive(Deserialize, Serialize)]
 struct RawSolutionState {
     pub dislikes: u64,
+    #[serde(default)]
+    pub optimal: bool,
 }
