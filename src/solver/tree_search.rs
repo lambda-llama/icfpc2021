@@ -140,11 +140,17 @@ impl Solver for TreeSearchSolver {
             let mut can_place_in: Vec<Vec<Vec<i16>>> =
                 vec![vec![vec![0; leny as usize]; lenx as usize]; figure_size];
 
+            let mut covered_points_on_hole = 0;
+            let mut point_is_on_hole: Vec<Vec<i16>> = vec![vec![0; leny as usize]; lenx as usize];
+
             for x in mn.x..=mx.x {
                 for y in mn.y..=mx.y {
                     let p = Point { x, y };
                     if !problem.contains_point(&p) {
                         continue;
+                    }
+                    if problem.point_on_hole(&p) {
+                        point_is_on_hole[(x - mn.x) as usize][(y - mn.y) as usize] = 1;
                     }
 
                     for v in 0..figure_size {
@@ -153,15 +159,15 @@ impl Solver for TreeSearchSolver {
 
                     // Do initial placing in coordinates.
                     // TODO: Can we process them in some clever order?
-                    // places_list[start_vertex].borrow_mut().push((x, y));
+                    places_list[start_vertex].borrow_mut().push((x, y));
                 }
             }
             // places_list[start_vertex].borrow_mut().push((25, 82));
 
             // Try to place the starting vertex in one of the hole vertices.
-            for p in &problem.hole {
-                places_list[start_vertex].borrow_mut().push((p.x, p.y));
-            }
+            // for p in &problem.hole {
+            //     places_list[start_vertex].borrow_mut().push((p.x, p.y));
+            // }
 
             //             // Each cycle is a sequence of (destination_vertex, edge_index_leading_to_it).
             //             let mut vertex_cycles: Vec<Vec<Vec<(usize, usize)>>> =
@@ -221,6 +227,8 @@ impl Solver for TreeSearchSolver {
                 &mut places_list,
                 &mut can_place_in,
                 &mut edges_consumed,
+                &mut point_is_on_hole,
+                &mut covered_points_on_hole,
                 &edge_precalc,
                 &back_edges,
                 &forward_edges,
@@ -353,6 +361,8 @@ impl<'a> SearchRunner<'a> {
         places_list: &mut Vec<RefCell<Vec<(i64, i64)>>>,
         can_place_in: &mut Vec<Vec<Vec<i16>>>,
         edges_consumed: &mut Vec<i16>,
+        point_is_on_hole: &mut Vec<Vec<i16>>,
+        covered_points_on_hole: &mut usize,
         edge_precalc: &Vec<(i64, i64)>,
         back_edges: &Vec<Vec<(usize, usize)>>,
         forward_edges: &Vec<Vec<(usize, usize)>>,
@@ -399,6 +409,11 @@ impl<'a> SearchRunner<'a> {
             return Some(dislikes);
         }
 
+        if self.pose.vertices.len() - index < problem.hole.len() - *covered_points_on_hole {
+            // Can't cover all points on hole!
+            return None;
+        }
+
         let v = self.order[index];
 
         let mut best_result = None;
@@ -413,6 +428,19 @@ impl<'a> SearchRunner<'a> {
             }
 
             self.pose.vertices[v] = Point { x: p.0, y: p.1 };
+
+            if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize][(p.1 - self.bbox_mn.y) as usize]
+                > 0
+            {
+                point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+                    [(p.1 - self.bbox_mn.y) as usize] += 1;
+                if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+                    [(p.1 - self.bbox_mn.y) as usize]
+                    == 2
+                {
+                    *covered_points_on_hole += 1;
+                }
+            }
 
             let mut can_continue_placement = true;
             for &(e_id, dst) in forward_edges[v].iter() {
@@ -495,6 +523,8 @@ impl<'a> SearchRunner<'a> {
                     places_list,
                     can_place_in,
                     edges_consumed,
+                    point_is_on_hole,
+                    covered_points_on_hole,
                     edge_precalc,
                     back_edges,
                     forward_edges,
@@ -509,6 +539,19 @@ impl<'a> SearchRunner<'a> {
                     }
                 }
                 self.terminate = false;
+            }
+
+            if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize][(p.1 - self.bbox_mn.y) as usize]
+                > 0
+            {
+                point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+                    [(p.1 - self.bbox_mn.y) as usize] -= 1;
+                if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+                    [(p.1 - self.bbox_mn.y) as usize]
+                    == 1
+                {
+                    *covered_points_on_hole -= 1;
+                }
             }
 
             for &(e_id, dst) in forward_edges[v].iter() {

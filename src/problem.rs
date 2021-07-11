@@ -373,6 +373,10 @@ impl Problem {
         true
     }
 
+    pub fn point_on_hole(&self, p: &Point) -> bool {
+        return self.hole.contains(p);
+    }
+
     pub fn contains_point(&self, p: &Point) -> bool {
         assert!(self.precalced);
 
