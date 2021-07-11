@@ -43,6 +43,14 @@ lazy_static! {
         map.insert("jammed_wave".to_owned(), Box::new(Cons::<jammer::JammerSolver, wave::WaveSolver>::default()));
         // Discrete tree search.
         map.insert("tree_search".to_owned(), Box::new(tree_search::TreeSearchSolver::default()));
+        // Discrete tree with 1 minute timeout.
+        map.insert("tree_search_1min".to_owned(), Box::new(tree_search::TreeSearchSolver{
+            timeout: Some(std::time::Duration::from_secs(60)),
+        }));
+        // Discrete tree with 10 minutes timeout.
+        map.insert("tree_search_10min".to_owned(), Box::new(tree_search::TreeSearchSolver{
+            timeout: Some(std::time::Duration::from_secs(10 * 60)),
+        }));
         map
     };
 }

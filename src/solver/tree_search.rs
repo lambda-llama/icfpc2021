@@ -7,7 +7,9 @@ use crate::problem::*;
 use super::Solver;
 
 #[derive(Default)]
-pub struct TreeSearchSolver {}
+pub struct TreeSearchSolver {
+    pub timeout: Option<std::time::Duration>,
+}
 
 impl Solver for TreeSearchSolver {
     fn solve_gen<'a>(
@@ -15,6 +17,11 @@ impl Solver for TreeSearchSolver {
         problem: Problem,
         pose: Rc<RefCell<Pose>>,
     ) -> generator::LocalGenerator<'a, (), Rc<RefCell<Pose>>> {
+        let deadline = match self.timeout {
+            Some(timeout) => Some(std::time::Instant::now() + timeout),
+            None => None,
+        };
+
         generator::Gn::new_scoped_local(move |mut s| {
             s.yield_(pose.clone());
 
@@ -35,7 +42,6 @@ impl Solver for TreeSearchSolver {
             let mut parents = vec![(0, 0); figure_size];
             {
                 let mut visited = vec![false; figure_size];
-                // TODO: Start from vertex with max degree.
                 topsort(
                     start_vertex,
                     None,
@@ -116,7 +122,7 @@ impl Solver for TreeSearchSolver {
                             &delta_precalc,
                             &edge_precalc,
                             &back_edges,
-                            &(std::time::Instant::now() + std::time::Duration::from_secs(60)),
+                            &deadline,
                         );
                         if result.is_some() {
                             if result.unwrap() == 0 {
@@ -188,7 +194,7 @@ impl<'a> SearchRunner<'a> {
         delta_precalc: &Vec<Vec<(i64, i64)>>,
         edge_precalc: &Vec<(i64, i64)>,
         back_edges: &Vec<Vec<(usize, usize)>>,
-        deadline: &std::time::Instant,
+        deadline: &Option<std::time::Instant>,
     ) -> Option<u64> {
         if self.terminate {
             return None;
@@ -202,10 +208,11 @@ impl<'a> SearchRunner<'a> {
                 "Iterations per second: {}",
                 (self.iterations as u128 * 1000) / time_taken.as_millis()
             );
-            // Set a 1 minute deadline.
-            if log_time > *deadline {
-                self.terminate = true;
-                return None;
+            if deadline.is_some() {
+                if log_time > deadline.unwrap() {
+                    self.terminate = true;
+                    return None;
+                }
             }
             self.iterations = 0;
             self.last_log_time = log_time;
