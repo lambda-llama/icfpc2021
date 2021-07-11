@@ -139,6 +139,8 @@ impl Solver for TreeSearchSolver {
                 info!("Vectex {} cycles: {}", v, vertex_cycles[v].len());
             }
 
+            let mut vertex_deltas_per_parent_choice: Vec<Vec<Vec<(i64, i64)>>> =
+                vec![vec![Vec::new(); 0]; figure_size];
             for v in 0..figure_size {
                 for cycle in &vertex_cycles[v] {
                     // For now only handling cycles of length 3.
@@ -151,6 +153,7 @@ impl Solver for TreeSearchSolver {
                         let mut delta_v1_is_feasible = vec![false; vertex_deltas[v1].len()];
                         let mut delta_v2_is_feasible = vec![false; vertex_deltas[v2].len()];
                         for (delta_v1_idx, delta_v1) in vertex_deltas[v1].iter().enumerate() {
+                            vertex_deltas_per_parent_choice[v2].push(Vec::new());
                             for (delta_v2_idx, delta_v2) in vertex_deltas[v2].iter().enumerate() {
                                 let mut deltas_are_feasible = false;
                                 let delta = (delta_v1.0 + delta_v2.0, delta_v1.1 + delta_v2.1);
@@ -173,6 +176,9 @@ impl Solver for TreeSearchSolver {
                                 if deltas_are_feasible {
                                     delta_v1_is_feasible[delta_v1_idx] = true;
                                     delta_v2_is_feasible[delta_v2_idx] = true;
+                                    // If parent edge chooses delta_v1_idx we can chose delta_v2.
+                                    vertex_deltas_per_parent_choice[v2][delta_v1_idx]
+                                        .push(*delta_v2);
                                 }
                             }
                         }
@@ -201,7 +207,11 @@ impl Solver for TreeSearchSolver {
                 if v == start_vertex {
                     continue;
                 }
-                info!("Vectex {} degree after pruning: {}", v, vertex_deltas[v].len());
+                info!(
+                    "Vectex {} degree after pruning: {}",
+                    v,
+                    vertex_deltas[v].len()
+                );
             }
 
             let precalc_time_taken = std::time::Instant::now() - precalc_start;
@@ -214,6 +224,7 @@ impl Solver for TreeSearchSolver {
             let mut runner = SearchRunner {
                 order,
                 placed: vec![false; figure_size],
+                delta_choice: vec![10000000; figure_size],
                 parents,
                 pose: pose.borrow().clone(),
                 best_dislikes: None,
@@ -238,7 +249,8 @@ impl Solver for TreeSearchSolver {
                         let result = runner.place_vertices(
                             1,
                             &problem,
-                            &delta_precalc,
+                            &vertex_deltas,
+                            &vertex_deltas_per_parent_choice,
                             &edge_precalc,
                             &back_edges,
                             &deadline,
@@ -336,6 +348,7 @@ struct SearchRunner<'a> {
     // Whether vertex is already placed.
     order: Vec<usize>,
     placed: Vec<bool>,
+    delta_choice: Vec<usize>,
     // Parent of the vertex in topsort order.
     parents: Vec<(usize, usize)>,
     pose: Pose,
@@ -356,7 +369,7 @@ impl<'a> SearchRunner<'a> {
         let v = self.order[index];
         for &(_, u) in &back_edges[v] {
             if !problem.contains_segment((self.pose.vertices[u], self.pose.vertices[v])) {
-                return false
+                return false;
             }
         }
         true
@@ -366,7 +379,8 @@ impl<'a> SearchRunner<'a> {
         &mut self,
         index: usize,
         problem: &Problem,
-        delta_precalc: &Vec<Vec<(i64, i64)>>,
+        vertex_deltas: &Vec<Vec<(i64, i64)>>,
+        vertex_deltas_per_parent_choice: &Vec<Vec<Vec<(i64, i64)>>>,
         edge_precalc: &Vec<(i64, i64)>,
         back_edges: &Vec<Vec<(usize, usize)>>,
         deadline: &Option<std::time::Instant>,
@@ -415,60 +429,57 @@ impl<'a> SearchRunner<'a> {
         let parent_pos = self.pose.vertices[parent];
         let mut best_result = None;
 
-        let parent_bounds = &edge_precalc[parent_edge_index];
-        for parent_d in parent_bounds.0..=parent_bounds.1 {
-            for (dx, dy) in &delta_precalc[parent_d as usize] {
-                // Place vertex `v`.
-                // We attach it to one of the previously placed vertices.
-                self.pose.vertices[v] = Point {
-                    x: parent_pos.x + dx,
-                    y: parent_pos.y + dy,
-                };
-                if self.pose.vertices[v].x < 0 || self.pose.vertices[v].y < 0 {
-                    continue;
-                }
-                if !problem.contains_point(&self.pose.vertices[v]) ||
-                   !self.check_back_edges_within_hole(index, problem, back_edges) {
-                    continue;
-                }
+        for (dx, dy) in &vertex_deltas[v] {
+            // Place vertex `v`.
+            // We attach it to one of the previously placed vertices.
+            self.pose.vertices[v] = Point {
+                x: parent_pos.x + dx,
+                y: parent_pos.y + dy,
+            };
+            if self.pose.vertices[v].x < 0 || self.pose.vertices[v].y < 0 {
+                continue;
+            }
+            if !problem.contains_point(&self.pose.vertices[v])
+                || !self.check_back_edges_within_hole(index, problem, back_edges)
+            {
+                continue;
+            }
 
-                debug!(
-                    "Placed {},{} in ({}, {}), delta: ({}, {})",
-                    v, index, self.pose.vertices[v].x, self.pose.vertices[v].y, dx, dy
-                );
+            debug!(
+                "Placed {},{} in ({}, {}), delta: ({}, {})",
+                v, index, self.pose.vertices[v].x, self.pose.vertices[v].y, dx, dy
+            );
 
-                // Validate that the placement is not breaking any edges.
-                let mut has_violations = false;
-                for &(e_id, dst) in back_edges[v].iter() {
-                    let d = Figure::distance_squared_int(
-                        self.pose.vertices[v],
-                        self.pose.vertices[dst],
-                    );
-                    let bounds = &edge_precalc[e_id];
-                    // Broken edge, placement is invalid, returning.
-                    if d < bounds.0 || d > bounds.1 {
-                        debug!("Bounds violated with {}, {} out of {:?}", dst, d, bounds);
-                        has_violations = true;
-                        break;
-                    }
+            // Validate that the placement is not breaking any edges.
+            let mut has_violations = false;
+            for &(e_id, dst) in back_edges[v].iter() {
+                let d =
+                    Figure::distance_squared_int(self.pose.vertices[v], self.pose.vertices[dst]);
+                let bounds = &edge_precalc[e_id];
+                // Broken edge, placement is invalid, returning.
+                if d < bounds.0 || d > bounds.1 {
+                    debug!("Bounds violated with {}, {} out of {:?}", dst, d, bounds);
+                    has_violations = true;
+                    break;
                 }
-                if has_violations {
-                    continue;
-                }
+            }
+            if has_violations {
+                continue;
+            }
 
-                if let Some(new_dislikes) = self.place_vertices(
-                    index + 1,
-                    problem,
-                    delta_precalc,
-                    edge_precalc,
-                    back_edges,
-                    deadline,
-                ) {
-                    if best_result.unwrap_or(1000000) > new_dislikes {
-                        best_result = Some(new_dislikes);
-                        if new_dislikes == 0 {
-                            return best_result;
-                        }
+            if let Some(new_dislikes) = self.place_vertices(
+                index + 1,
+                problem,
+                vertex_deltas,
+                vertex_deltas_per_parent_choice,
+                edge_precalc,
+                back_edges,
+                deadline,
+            ) {
+                if best_result.unwrap_or(1000000) > new_dislikes {
+                    best_result = Some(new_dislikes);
+                    if new_dislikes == 0 {
+                        return best_result;
                     }
                 }
             }
