@@ -20,6 +20,13 @@ impl Solver for TreeSearchSolver {
 
             let figure_size = problem.figure.vertices.len();
 
+            let start_vertex = 0;
+            // for i in 0..figure_size {
+            //     if problem.figure.vertex_edges[i].len() > problem.figure.vertex_edges[start_vertex].len() {
+            //         start_vertex = i;
+            //     }
+            // }
+
             let mut order = Vec::new();
             let mut v_in_order = vec![0; figure_size];
             let mut parents = vec![(0, 0); figure_size];
@@ -27,7 +34,7 @@ impl Solver for TreeSearchSolver {
                 let mut visited = vec![false; figure_size];
                 // TODO: Start from vertex with max degree.
                 topsort(
-                    0,
+                    start_vertex,
                     None,
                     None,
                     &mut order,
@@ -93,11 +100,11 @@ impl Solver for TreeSearchSolver {
                 for x in mn.x..=mx.x {
                     for y in mn.y..=mx.y {
                         // TODO: Can we process them in some clever order?
-                        runner.pose.vertices[0] = Point { x, y };
+                        runner.pose.vertices[runner.order[0]] = Point { x, y };
                         if !problem.contains_point(&runner.pose.vertices[runner.order[0]]) {
                             continue;
                         }
-                        debug!("Placed vertex 0 in ({}, {})", x, y);
+                        debug!("Placed vertex {} in ({}, {})", runner.order[0], x, y);
                         // runner.placed[runner.order[0]] = true;
                         let result = runner.place_vertices(
                             1,
