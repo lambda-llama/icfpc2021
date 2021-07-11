@@ -137,6 +137,7 @@ impl Figure {
 pub enum BonusType {
     Globalist, // Shared epsilon
     BreakALeg, // Divide an edge into two
+    WallHack,  // Allow one vertex outside the hole
 }
 
 impl From<&str> for BonusType {
@@ -144,6 +145,7 @@ impl From<&str> for BonusType {
         match b {
             "GLOBALIST" => BonusType::Globalist,
             "BREAK_A_LEG" => BonusType::BreakALeg,
+            "WALLHACK" => BonusType::WallHack,
             t => panic!("Failed to parse bonus type '{}'", t),
         }
     }
@@ -154,6 +156,7 @@ impl From<BonusType> for String {
         match b {
             BonusType::Globalist => "GLOBALIST".to_owned(),
             BonusType::BreakALeg => "BREAK_A_LEG".to_owned(),
+            BonusType::WallHack => "WALLHACK".to_owned(),
         }
     }
 }
