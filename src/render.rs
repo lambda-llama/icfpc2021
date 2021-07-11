@@ -50,7 +50,22 @@ impl GuiState {
         let problems_count = storage::get_problems_count();
         let problems = (1..=problems_count)
             .into_iter()
-            .map(|id| CString::new(format!("{}", id)).unwrap())
+            .map(
+                |id| match storage::load_solution(id).expect("Failed to load a solution") {
+                    Some(s) => {
+                        if s.server_state.dislikes == u64::MAX {
+                            CString::new(format!("#152#{}", id)).unwrap()
+                        } else if !s.state.valid {
+                            CString::new(format!("#150#{}", id)).unwrap()
+                        } else if s.state.optimal {
+                            CString::new(format!("#157#{}", id)).unwrap()
+                        } else {
+                            CString::new(format!("{}", id)).unwrap()
+                        }
+                    }
+                    None => CString::new(format!("#152#{}", id)).unwrap(),
+                },
+            )
             .collect();
 
         Ok(GuiState {
@@ -159,7 +174,8 @@ fn render_gui(
     d.set_window_title(
         &thread,
         &format!(
-            "eps: {}; dlike_score: {}; inside: {}, edges ok: {}",
+            "Problem {}; eps: {}; dlike_score: {}; inside: {}, edges ok: {}",
+            problem.id,
             problem.figure.epsilon,
             problem.dislikes(pose),
             problem.contains(pose),
@@ -207,7 +223,7 @@ Misc: S - Save, D - Step Solver, F - Run Solver, Shift+L - Reset Selected, Ctrl+
     );
 
     // Problem selector
-    const PROBLEM_SELECTOR_WIDTH: f32 = 40.0;
+    const PROBLEM_SELECTOR_WIDTH: f32 = 60.0;
     let problems = state
         .problems
         .iter()
