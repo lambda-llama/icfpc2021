@@ -1,40 +1,36 @@
 use rayon::prelude::*;
 
-use crate::common::*;
-use crate::problem::{Pose, Problem};
+use crate::problem::*;
 use crate::solver::SOLVERS;
+use crate::{common::*, storage};
 
-pub fn run(
-    problems_path: &std::path::Path,
-    solutions_base_path: &std::path::Path,
-    solver_name: Option<&str>,
-) -> Result<()> {
+pub fn run(solver_name: Option<&str>, id: Option<u32>) -> Result<()> {
     let mut solver_names = match solver_name {
         Some(name) => vec![name],
         None => SOLVERS.keys().map(|s| &s[..]).collect(),
     };
     solver_names.sort();
-    let count = problems_path.read_dir()?.count();
-    (1..=count)
-        .into_par_iter()
+    let ids = match id {
+        Some(id) => vec![id],
+        None => (1..=storage::get_problems_count()).collect(),
+    };
+    ids.into_par_iter()
         .map(|i| -> Result<()> {
             let mut stdout = String::new();
-            let problem = Problem::from_json(&std::fs::read(
-                problems_path.join(format!("{}.problem", i)),
-            )?)?;
-            let solution_path = solutions_base_path.join(format!("{}.solution", i));
-            let mut best_dislikes = if solution_path.exists() {
-                problem.dislikes(&Pose::from_json(&std::fs::read(&solution_path)?)?)
-            } else {
-                u64::MAX
-            };
+            let problem = storage::load_problem(i)?;
+            let solution = storage::load_solution(i)?;
+            let mut best_dislikes = solution
+                .map(|s| s.state)
+                .unwrap_or(SolutionState::new())
+                .dislikes;
             if best_dislikes == 0 {
+                warn!("Skipping problem {} as it's been solved optimally", i);
                 return Ok(());
             }
             stdout += &format!("Problem {}\n", i);
             for &name in &solver_names {
-                let solutions_path = solutions_base_path.join(name);
-                std::fs::create_dir_all(&solutions_path)?;
+                let solver_solutions_path = storage::SOLUTIONS_PATH.join(name);
+                std::fs::create_dir_all(&solver_solutions_path)?;
                 let solver = SOLVERS.get(name).unwrap();
                 let start = std::time::Instant::now();
                 let pose = solver.solve(problem.clone());
@@ -50,14 +46,18 @@ pub fn run(
                     time_taken.subsec_millis()
                 );
                 if valid {
-                    let current_solution_path = solutions_path.join(format!("{}.solution", i));
-                    std::fs::write(&current_solution_path, pose.to_json()?)?;
+                    let solver_solution_path =
+                        solver_solutions_path.join(format!("{}.solution", i));
+                    std::fs::write(&solver_solution_path, pose.to_json()?)?;
                     if best_dislikes > dislikes {
                         stdout += &format!(
                             "Replacing the current best solution ({} > {})\n",
                             best_dislikes, dislikes
                         );
-                        std::fs::copy(current_solution_path, &solution_path)?;
+                        std::fs::copy(
+                            solver_solution_path,
+                            &storage::SOLUTIONS_PATH.join(format!("{}.solution", i)),
+                        )?;
                         best_dislikes = dislikes;
                     }
                 }

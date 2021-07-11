@@ -435,6 +435,10 @@ pub struct SolutionState {
 }
 
 impl SolutionState {
+    pub fn new() -> Self {
+        SolutionState { dislikes: u64::MAX }
+    }
+
     pub fn from_json(data: &[u8]) -> Result<Self> {
         let RawSolutionState { dislikes } = serde_json::from_slice(data)?;
         Ok(SolutionState { dislikes })
@@ -446,6 +450,12 @@ impl SolutionState {
         };
         Ok(serde_json::to_string(&solution_state)?)
     }
+}
+
+pub struct Solution {
+    pub id: u32,
+    pub pose: Pose,
+    pub state: SolutionState,
 }
 
 // Serialization helper types below

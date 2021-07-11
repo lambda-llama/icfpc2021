@@ -1,7 +1,7 @@
 use lazy_static;
 use reqwest::{self, blocking::Client};
 
-use crate::common::*;
+use crate::{common::*, problem::Pose};
 
 pub struct Session {
     token: String,
@@ -37,9 +37,13 @@ impl Session {
         Ok(())
     }
 
-    // Create a separate upload for `Pose` if needed
-    pub fn upload_solution(&self, id: u64, path: &str) -> Result<()> {
-        let data = std::fs::read(path)?;
+    pub fn upload_solution(&self, id: u64, pose: &Pose) -> Result<()> {
+        let data = pose
+            .to_json()?
+            .as_bytes()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
         let _ = self
             .client
             .post(format!("https://poses.live/api/problems/{}/solutions", id))

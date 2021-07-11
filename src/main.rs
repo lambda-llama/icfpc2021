@@ -1,9 +1,7 @@
 use clap::App;
 use clap::Arg;
 use log::LevelFilter;
-use problem::Pose;
 use problem::Problem;
-use problem::SolutionState;
 use render::interact;
 use simplelog::{ColorChoice, Config, TerminalMode};
 
@@ -18,6 +16,7 @@ mod problem;
 mod render;
 mod runner;
 mod solver;
+mod storage;
 mod transform;
 
 use crate::common::*;
@@ -30,28 +29,19 @@ fn main() -> Result<()> {
                 .takes_value(false)
                 .multiple_occurrences(true),
         )
-        // Run one solver on one problem
-        .subcommand(
-            App::new("run")
-                .arg("<SOLVER> solver name")
-                .arg("<INPUT> path/to/N.problem")
-                .arg("<OUTPUT> path/to/N.solution"),
-        )
-        // Run one or all solvers on all problems
+        // Run one or all solvers on one or all problems
         .subcommand(
             App::new("solve")
-                .arg(Arg::new("INPUT").default_value("./problems"))
-                .arg(Arg::new("OUTPUT").default_value("./solutions"))
                 .arg(
                     Arg::new("SOLVER")
                         .short('a')
                         .takes_value(true)
                         .default_missing_value(""),
-                ),
+                )
+                .arg(Arg::new("ID").short('i').takes_value(true)),
         )
         .subcommand(
             App::new("render")
-                .arg(Arg::new("INPUT").default_value("./problems"))
                 .arg(Arg::new("ID").short('i').takes_value(true))
                 .arg(Arg::new("SOLVER").short('a').takes_value(true))
                 .arg(Arg::new("SOLUTION").short('s').takes_value(true)),
@@ -61,16 +51,7 @@ fn main() -> Result<()> {
                 .arg("<ID> problem N")
                 .arg("<PATH> path/to/N.problem"),
         )
-        .subcommand(
-            App::new("upload")
-                .arg("<ID> problem N")
-                .arg("<PATH> path/to/N.solution"),
-        )
-        .subcommand(
-            App::new("upload_all")
-                .arg(Arg::new("PROBLEMS_PATH").default_value("./problems"))
-                .arg(Arg::new("SOLUTIONS_PATH").default_value("./solutions")),
-        )
+        .subcommand(App::new("upload_all"))
         .subcommand(App::new("stats").arg("<INPUT> path/to/problems"));
 
     let app_matches = app.get_matches();
@@ -90,31 +71,6 @@ fn main() -> Result<()> {
     )?;
 
     match app_matches.subcommand() {
-        Some(("run", matches)) => {
-            let problem = matches.value_of("INPUT").unwrap();
-            let data = std::fs::read(&problem)?;
-            let problem = Problem::from_json(&data)?;
-            // TODO: remove these debug prints later
-            println!("{:?}", problem);
-            let name = matches.value_of("SOLVER").unwrap();
-            let start = std::time::Instant::now();
-            let pose = solver::SOLVERS
-                .get(name)
-                .expect(&format!("Failed to find solver '{}'", name))
-                .solve(problem.clone());
-            let dislikes = problem.dislikes(&pose);
-            let valid = problem.validate(&pose);
-            let time_taken = std::time::Instant::now() - start;
-            let json = pose.to_json()?;
-            println!(
-                "dislikes = {}, valid = {}, took {}.{}s",
-                dislikes,
-                valid,
-                time_taken.as_secs(),
-                time_taken.subsec_millis()
-            );
-            std::fs::write(matches.value_of("OUTPUT").unwrap(), json)?;
-        }
         Some(("solve", matches)) => {
             let solver_name = match matches.value_of("SOLVER") {
                 Some("") | None => None,
@@ -125,12 +81,12 @@ fn main() -> Result<()> {
                     Some(name)
                 }
             };
-            let problems_path = std::path::Path::new(matches.value_of("INPUT").unwrap());
-            let solutions_base_path = std::path::Path::new(matches.value_of("OUTPUT").unwrap());
-            runner::run(problems_path, solutions_base_path, solver_name)?;
+            let id = matches
+                .value_of("ID")
+                .map(|s| s.parse().expect("Failed to parse the problem ID"));
+            runner::run(solver_name, id)?;
         }
         Some(("render", matches)) => {
-            let problems_path = std::path::Path::new(matches.value_of("INPUT").unwrap());
             let solution_path = matches
                 .value_of("SOLUTION")
                 .map(|p| std::path::Path::new(p));
@@ -146,7 +102,7 @@ fn main() -> Result<()> {
                     .expect(&format!("Failed to find solver '{}'", name)),
                 None => &solver::SOLVERS["id"],
             };
-            interact(problems_path, solution_path, solver, id)?;
+            interact(solution_path, solver, id)?;
         }
         Some(("download", matches)) => {
             portal::SESSION.download_problem(
@@ -154,63 +110,38 @@ fn main() -> Result<()> {
                 matches.value_of("PATH").unwrap(),
             )?;
         }
-        Some(("upload", matches)) => {
-            let solution = matches.value_of("PATH").unwrap();
-            let solution_data = std::fs::read(&solution)?;
-            let pose = Pose::from_json(&solution_data)?;
-
-            let id = matches.value_of("ID").unwrap();
-            let problem = format!("problems/{}.problem", matches.value_of("ID").unwrap());
-            let problem_data = std::fs::read(&problem)?;
-            let problem = Problem::from_json(&problem_data)?;
-            assert!(problem.validate(&pose), "Pose should fit into the hole");
-
-            portal::SESSION.upload_solution(id.parse()?, solution)?;
-        }
-        Some(("upload_all", matches)) => {
-            let problems_path = std::path::Path::new(matches.value_of("PROBLEMS_PATH").unwrap());
-            let solutions_path = std::path::Path::new(matches.value_of("SOLUTIONS_PATH").unwrap());
-            let count = problems_path.read_dir()?.count();
-
-            for i in 1..count + 1 {
-                let problem = Problem::from_json(&std::fs::read(
-                    problems_path.join(format!("{}.problem", i)),
-                )?)?;
-                let solution_path = solutions_path.join(format!("{}.solution", i));
-                if !solution_path.exists() {
-                    info!("No solution for problem {}", i);
-                    continue;
-                }
-
-                let solution_data = std::fs::read(&solution_path)?;
-                let pose = Pose::from_json(&solution_data)?;
-                if !problem.validate(&pose) {
-                    warn!("For problem {} solution does not fit into the hole", i);
-                    continue;
-                }
-                let dislikes = problem.dislikes(&pose);
-                let solution_state_path = solutions_path.join(format!("{}.state", i));
-
-                if solution_state_path.exists() {
-                    let solution_state_data = std::fs::read(&solution_state_path)?;
-                    let solution_state = SolutionState::from_json(&solution_state_data)?;
-
-                    if solution_state.dislikes == dislikes {
-                        info!(
-                            "For problem {} solution with same score {} was already submitted",
-                            i, dislikes
-                        );
+        Some(("upload_all", _matches)) => {
+            for i in 1..=storage::get_problems_count() {
+                let problem = storage::load_problem(i)?;
+                let solution = storage::load_solution(i)?;
+                match solution {
+                    None => {
+                        info!("No solution for problem {}", i);
                         continue;
                     }
-                }
+                    Some(mut s) => {
+                        if !problem.validate(&s.pose) {
+                            warn!("For problem {} solution does not fit into the hole", i);
+                            continue;
+                        }
+                        let dislikes = problem.dislikes(&s.pose);
+                        if s.state.dislikes == dislikes {
+                            info!(
+                                "For problem {} solution with same score {} was already submitted",
+                                i, dislikes
+                            );
+                            continue;
+                        }
 
-                warn!(
-                    "Uploading solution for problem {}, dislikes: {}",
-                    i, dislikes
-                );
-                portal::SESSION.upload_solution(i as u64, solution_path.to_str().unwrap())?;
-                let solution_state_data = SolutionState { dislikes };
-                std::fs::write(solution_state_path, solution_state_data.to_json()?)?;
+                        warn!(
+                            "Uploading solution for problem {}, dislikes: {}",
+                            i, dislikes
+                        );
+                        portal::SESSION.upload_solution(i as u64, &s.pose)?;
+                        s.state.dislikes = dislikes;
+                        storage::save_solution_state(&s)?;
+                    }
+                }
             }
         }
         Some(("stats", matches)) => {

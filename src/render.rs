@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ffi::CString;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 use std::{thread, time};
 
@@ -9,10 +9,10 @@ use geomath::prelude::coordinates::Polar;
 use ordered_float::NotNan;
 use raylib::prelude::*;
 
-use crate::common::*;
 use crate::problem::*;
 use crate::solver::Solver;
 use crate::transform::Transform;
+use crate::{common::*, storage};
 
 struct GuiState {
     // Coord translator
@@ -39,21 +39,15 @@ struct GuiState {
     pub problems_scroll_idx: i32,
     pub problems_selected: i32,
 
-    // Problem/solution
-    pub problems_path: PathBuf,
+    // Solver
     pub solver: &'static Box<dyn Solver>,
 }
 
 impl GuiState {
-    pub fn new(
-        problems_path: &Path,
-        problem: &Problem,
-        solver: &'static Box<dyn Solver>,
-        id: u32,
-    ) -> Result<Self> {
+    pub fn new(problem: &Problem, solver: &'static Box<dyn Solver>, id: u32) -> Result<Self> {
         let translator = Self::create_translator(problem);
 
-        let problems_count = problems_path.read_dir()?.count();
+        let problems_count = storage::get_problems_count();
         let problems = (1..=problems_count)
             .into_iter()
             .map(|id| CString::new(format!("{}", id)).unwrap())
@@ -73,20 +67,12 @@ impl GuiState {
             problems_focus_idx: 0,
             problems_scroll_idx: 0,
             problems_selected: (id - 1) as i32,
-            problems_path: problems_path.to_owned(),
             solver,
         })
     }
 
-    fn load_problem_ex(problems_path: &Path, id: u32) -> Result<Problem> {
-        Problem::from_json(&std::fs::read(
-            problems_path.join(format!("{}.problem", id)),
-        )?)
-    }
-
     pub fn load_problem(&mut self) -> Result<Problem> {
-        let problem =
-            Self::load_problem_ex(&self.problems_path, (self.problems_selected + 1) as u32)?;
+        let problem = storage::load_problem((self.problems_selected + 1) as u32)?;
         self.translator = Self::create_translator(&problem);
         self.dragged_point = None;
         self.viewport_drag_point = None;
@@ -446,7 +432,6 @@ fn hit_test_rect(pose: &Pose, min: Point, max: Point) -> Vec<usize> {
 }
 
 pub fn interact<'a>(
-    problems_path: &Path,
     solution_path: Option<&Path>,
     solver: &'static Box<dyn Solver>,
     id: u32,
@@ -458,12 +443,11 @@ pub fn interact<'a>(
 
     let (mut rh, thread) = raylib::init().size(WINDOW_WIDTH, WINDOW_HEIGHT).build();
 
-    let mut problem = GuiState::load_problem_ex(problems_path, id)?;
-    let mut state = GuiState::new(problems_path, &problem, solver, id)?;
+    let mut problem = storage::load_problem(id)?;
+    let mut state = GuiState::new(&problem, solver, id)?;
 
     let pose = match solution_path {
-        Some(p) => Pose::from_json(&std::fs::read(p).expect("Failed to read solution file"))
-            .expect("Failed to parse solution file"),
+        Some(p) => storage::load_custom_solution(p)?,
         None => Pose {
             vertices: problem.figure.vertices.clone(),
             bonuses: vec![],
