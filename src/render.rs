@@ -695,9 +695,21 @@ pub fn interact<'a>(
                     }
                 }
                 KeyboardKey::KEY_S => {
-                    const PATH: &'static str = "./current.solution";
-                    std::fs::write(PATH, pose.borrow().to_json()?)?;
-                    info!("Saved to {}", PATH);
+                    let id = (state.problems_selected + 1) as u32;
+                    let dislikes = problem.dislikes(&pose.borrow());
+                    let s = SolutionState {
+                            dislikes,
+                            valid: problem.validate(&pose.borrow()),
+                            optimal: dislikes == 0,
+                        };
+                    let solution = Solution {
+                        id,
+                        pose: pose.borrow().clone(),
+                        state: s,
+                        server_state: storage::load_server_state(id)?
+                    };
+                    storage::save_solution(&solution, None)?;
+                    info!("Saved solution {} to the default solution folder", id);
                 }
                 KeyboardKey::KEY_D => {
                     if let Some(temp) = gen.resume() {
