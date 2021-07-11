@@ -192,7 +192,7 @@ fn render_gui(
     let mut text = b"\
 Tools: Q - Pull, E - Center Illegal, Shift+E - Center All, C - Flip Horz, V - Flip Vert, W - Fold (hold), R - Rotate (hold)\n\
 Selection/Navigation: Ctrl+A - Select All, Shift adds, Ctrl removes, Z - Select Adjacent, X - Invert Selection, RMB - Drag Viewport, Scrollwheel - Zoom
-Misc: S - Save, D - Step Solver, F - Run Solver, Ctrl+L - Reset Solution\n\
+Misc: S - Save, D - Step Solver, F - Run Solver, Shift+L - Reset Selected, Ctrl+L - Reset Solution\n\
 "
     .to_owned();
     d.gui_text_box_multi(
@@ -743,12 +743,18 @@ pub fn interact<'a>(
                         warn!("No more steps in the solver");
                     }
                 }
-                KeyboardKey::KEY_L if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) => {
-                    gen = state.solver.solve_gen(
-                        problem.clone(),
-                        Rc::new(RefCell::new(problem.figure.get_default_pose())),
-                    );
-                    pose = gen.resume().unwrap();
+                KeyboardKey::KEY_L => {
+                    if rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT) {
+                        for &idx in &state.selected_points {
+                            pose.borrow_mut().vertices[idx] = problem.figure.vertices[idx];
+                        }
+                    } else if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) {
+                        gen = state.solver.solve_gen(
+                            problem.clone(),
+                            Rc::new(RefCell::new(problem.figure.get_default_pose())),
+                        );
+                        pose = gen.resume().unwrap();
+                    }
                 }
                 _ => {}
             }
