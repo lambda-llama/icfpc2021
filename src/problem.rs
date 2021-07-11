@@ -287,11 +287,11 @@ impl Problem {
                 if is_point_belongs_to_poly(&self.poly, p) {
                     self.inside_points[(p.x - self.bbox_min.x) as usize][(p.y - self.bbox_min.y) as usize] = true;
                     // TODO: Currently it slows down startup of the render mode. We need to do it in a lazy way.
-                    for &q in &inside_points_vec {
-                        if is_segment_belongs_to_poly(&self.poly, (p, q)) {
-                            self.inside_segments.insert((p, q));
-                        }
-                    }
+                    // for &q in &inside_points_vec {
+                    //     if is_segment_belongs_to_poly(&self.poly, (p, q)) {
+                    //         self.inside_segments.insert((p, q));
+                    //     }
+                    // }
                     inside_points_vec.push(p);
                 }
             }

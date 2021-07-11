@@ -31,9 +31,11 @@ impl Solver for TreeSearchSolver {
             s.yield_(pose.clone());
 
             let figure_size = problem.figure.vertices.len();
-            if figure_size > 20 {
+            if figure_size > 100 {
                 done!();
             }
+
+            let (mn, mx) = problem.bounding_box();
 
             let start_vertex = 0;
             // for i in 0..figure_size {
@@ -97,12 +99,17 @@ impl Solver for TreeSearchSolver {
                 edge_precalc.push(problem.figure.edge_len2_bounds_int(edge_index));
             }
 
+            let mut edges_consumed: Vec<i16> = vec![0; figure_size];
+            let mut forward_edges: Vec<Vec<(usize, usize)>> = Vec::new();
             let mut back_edges: Vec<Vec<(usize, usize)>> = Vec::new();
             for v in 0..figure_size {
+                forward_edges.push(Vec::new());
                 back_edges.push(Vec::new());
                 for &(e_id, dst) in problem.figure.vertex_edges[v].iter() {
                     if v_in_order[dst] < v_in_order[v] {
                         back_edges[v].push((e_id, dst));
+                    } else {
+                        forward_edges[v].push((e_id, dst));
                     }
                 }
             }
@@ -122,34 +129,58 @@ impl Solver for TreeSearchSolver {
                 info!("Vectex {} degree: {}", v, vertex_deltas[v].len());
             }
 
-//             // Each cycle is a sequence of (destination_vertex, edge_index_leading_to_it).
-//             let mut vertex_cycles: Vec<Vec<Vec<(usize, usize)>>> =
-//                 vec![vec![Vec::new(); 0]; figure_size];
-//             let mut path: Vec<(usize, usize)> = Vec::new();
-//             for v in 0..figure_size {
-//                 find_cycles(
-//                     v,
-//                     v,
-//                     &problem.figure.vertex_edges,
-//                     &topo_vertex_edges,
-//                     &mut path,
-//                     &mut vertex_cycles[v],
-//                     6,
-//                 );
-//                 info!("Vectex {} cycles: {}", v, vertex_cycles[v].len());
-//             }
-// 
-//             for v in 0..figure_size {
-//                 // Starting vertex has no parent, so skipping for now.
-//                 if v == start_vertex {
-//                     continue;
-//                 }
-//                 info!(
-//                     "Vectex {} degree after pruning: {}",
-//                     v,
-//                     vertex_deltas[v].len()
-//                 );
-//             }
+            let lenx = mx.x - mn.x + 1;
+            let leny = mx.y - mn.y + 1;
+            let mut places_list: Vec<RefCell<Vec<(i64, i64)>>> =
+                vec![RefCell::new(Vec::new()); figure_size];
+            let mut can_place_in: Vec<Vec<Vec<i16>>> =
+                vec![vec![vec![0; leny as usize]; lenx as usize]; figure_size];
+
+            for x in mn.x..=mx.x {
+                for y in mn.y..=mx.y {
+                    let p = Point { x, y };
+                    if !problem.contains_point(&p) {
+                        continue;
+                    }
+
+                    for v in 0..figure_size {
+                        can_place_in[v][(x - mn.x) as usize][(y - mn.y) as usize] += 1;
+                    }
+
+                    // Do initial placing in coordinates.
+                    // TODO: Can we process them in some clever order?
+                    places_list[start_vertex].borrow_mut().push((x, y));
+                }
+            }
+
+            //             // Each cycle is a sequence of (destination_vertex, edge_index_leading_to_it).
+            //             let mut vertex_cycles: Vec<Vec<Vec<(usize, usize)>>> =
+            //                 vec![vec![Vec::new(); 0]; figure_size];
+            //             let mut path: Vec<(usize, usize)> = Vec::new();
+            //             for v in 0..figure_size {
+            //                 find_cycles(
+            //                     v,
+            //                     v,
+            //                     &problem.figure.vertex_edges,
+            //                     &topo_vertex_edges,
+            //                     &mut path,
+            //                     &mut vertex_cycles[v],
+            //                     6,
+            //                 );
+            //                 info!("Vectex {} cycles: {}", v, vertex_cycles[v].len());
+            //             }
+            //
+            //             for v in 0..figure_size {
+            //                 // Starting vertex has no parent, so skipping for now.
+            //                 if v == start_vertex {
+            //                     continue;
+            //                 }
+            //                 info!(
+            //                     "Vectex {} degree after pruning: {}",
+            //                     v,
+            //                     vertex_deltas[v].len()
+            //                 );
+            //             }
 
             let precalc_time_taken = std::time::Instant::now() - precalc_start;
             info!(
@@ -168,37 +199,27 @@ impl Solver for TreeSearchSolver {
                 last_log_time: std::time::Instant::now(),
                 iterations: 0,
                 terminate: false,
+                bbox_mn: mn,
+                bbox_mx: mx,
                 scope: s,
             };
 
-            // Do initial placing in coordinates.
-            let (mn, mx) = problem.bounding_box();
-            {
-                for x in mn.x..=mx.x {
-                    for y in mn.y..=mx.y {
-                        // TODO: Can we process them in some clever order?
-                        runner.pose.vertices[runner.order[0]] = Point { x, y };
-                        if !problem.contains_point(&runner.pose.vertices[runner.order[0]]) {
-                            continue;
-                        }
-                        debug!("Placed vertex {} in ({}, {})", runner.order[0], x, y);
-                        // runner.placed[runner.order[0]] = true;
-                        let result = runner.place_vertices(
-                            1,
-                            &problem,
-                            &vertex_deltas,
-                            &edge_precalc,
-                            &back_edges,
-                            &deadline,
-                        );
-                        if result.is_some() {
-                            if result.unwrap() == 0 {
-                                // TODO: optionally yield pose with optimal = Some(true)
-                                done!();
-                            }
-                        }
-                        // runner.placed[runner.order[0]] = false;
-                    }
+            let result = runner.place_vertices(
+                0,
+                &problem,
+                &mut places_list,
+                &mut can_place_in,
+                &mut edges_consumed,
+                &edge_precalc,
+                &back_edges,
+                &forward_edges,
+                &delta_precalc,
+                &deadline,
+            );
+            if result.is_some() {
+                if result.unwrap() == 0 {
+                    // TODO: optionally yield pose with optimal = Some(true)
+                    done!();
                 }
             }
 
@@ -292,6 +313,8 @@ struct SearchRunner<'a> {
     last_log_time: std::time::Instant,
     iterations: u64,
     terminate: bool,
+    bbox_mn: Point,
+    bbox_mx: Point,
     scope: Scope<'a, (), Rc<RefCell<Pose>>>,
 }
 
@@ -315,9 +338,13 @@ impl<'a> SearchRunner<'a> {
         &mut self,
         index: usize,
         problem: &Problem,
-        vertex_deltas: &Vec<Vec<(i64, i64)>>,
+        places_list: &mut Vec<RefCell<Vec<(i64, i64)>>>,
+        can_place_in: &mut Vec<Vec<Vec<i16>>>,
+        edges_consumed: &mut Vec<i16>,
         edge_precalc: &Vec<(i64, i64)>,
         back_edges: &Vec<Vec<(usize, usize)>>,
+        forward_edges: &Vec<Vec<(usize, usize)>>,
+        delta_precalc: &Vec<Vec<(i64, i64)>>,
         deadline: &Option<std::time::Instant>,
     ) -> Option<u64> {
         if self.terminate {
@@ -359,64 +386,111 @@ impl<'a> SearchRunner<'a> {
         }
 
         let v = self.order[index];
-        // self.placed[v] = true;
-        let (parent, _) = self.parents[v];
-        let parent_pos = self.pose.vertices[parent];
+
         let mut best_result = None;
+        // Hack around Rust rules.
+        let v_places = places_list[v].take();
 
-        for (idx, (dx, dy)) in vertex_deltas[v].iter().enumerate() {
-            // Place vertex `v`.
-            // We attach it to one of the previously placed vertices.
-            self.pose.vertices[v] = Point {
-                x: parent_pos.x + dx,
-                y: parent_pos.y + dy,
-            };
-            if !problem.contains_point(&self.pose.vertices[v])
-                || !self.check_back_edges_within_hole(index, problem, back_edges)
-            {
-                continue;
-            }
+        for p in v_places.iter() {
+            debug!("Placed vertex {} in ({}, {})", v, p.0, p.1);
+            self.pose.vertices[v] = Point { x: p.0, y: p.1 };
 
-            debug!(
-                "Placed {},{} in ({}, {}), delta: ({}, {})",
-                v, index, self.pose.vertices[v].x, self.pose.vertices[v].y, dx, dy
-            );
+            let mut can_continue_placement = true;
+            for &(e_id, dst) in forward_edges[v].iter() {
+                edges_consumed[dst] += 1;
+                let mut fill_places_list = false;
+                if edges_consumed[dst] == back_edges[dst].len() as i16 {
+                    fill_places_list = true;
+                    places_list[dst].borrow_mut().clear();
+                }
 
-            // Validate that the placement is not breaking any edges.
-            let mut has_violations = false;
-            for &(e_id, dst) in back_edges[v].iter() {
-                let d =
-                    Figure::distance_squared_int(self.pose.vertices[v], self.pose.vertices[dst]);
+                // Go over deltas precalcs here.
                 let bounds = &edge_precalc[e_id];
-                // Broken edge, placement is invalid, returning.
-                if d < bounds.0 || d > bounds.1 {
-                    debug!("Bounds violated with {}, {} out of {:?}", dst, d, bounds);
-                    has_violations = true;
-                    break;
+                let mut valid_placements = 0;
+                for d in bounds.0..=bounds.1 {
+                    for delta in delta_precalc[d as usize].iter() {
+                        let p_dst = (p.0 + delta.0, p.1 + delta.1);
+                        if p_dst.0 < self.bbox_mn.x
+                            || p_dst.0 > self.bbox_mx.x
+                            || p_dst.1 < self.bbox_mn.y
+                            || p_dst.1 > self.bbox_mx.y
+                        {
+                            continue;
+                        }
+                        // Propagate placement information.
+                        can_place_in[dst][(p_dst.0 - self.bbox_mn.x) as usize]
+                            [(p_dst.1 - self.bbox_mn.y) as usize] += 1;
+
+                        // TODO: Compare with expected edges number.
+                        if can_place_in[dst][(p_dst.0 - self.bbox_mn.x) as usize]
+                            [(p_dst.1 - self.bbox_mn.y) as usize]
+                            == 1 + edges_consumed[dst]
+                        {
+                            valid_placements += 1;
+                            if fill_places_list {
+                                places_list[dst].borrow_mut().push(p_dst);
+                            }
+                        }
+                    }
+                }
+
+                if valid_placements == 0 {
+                    can_continue_placement = false;
+                    // TODO: Can't break early for now, need to complete incremental update.
                 }
             }
-            if has_violations {
-                continue;
+            if can_continue_placement {
+                // Dive deeper.
+                if let Some(new_dislikes) = self.place_vertices(
+                    index + 1,
+                    problem,
+                    places_list,
+                    can_place_in,
+                    edges_consumed,
+                    edge_precalc,
+                    back_edges,
+                    forward_edges,
+                    delta_precalc,
+                    deadline,
+                ) {
+                    if best_result.unwrap_or(1000000) > new_dislikes {
+                        best_result = Some(new_dislikes);
+                        if new_dislikes == 0 {
+                            return best_result;
+                        }
+                    }
+                }
             }
 
-            self.delta_choice[v] = idx;
-            if let Some(new_dislikes) = self.place_vertices(
-                index + 1,
-                problem,
-                vertex_deltas,
-                edge_precalc,
-                back_edges,
-                deadline,
-            ) {
-                if best_result.unwrap_or(1000000) > new_dislikes {
-                    best_result = Some(new_dislikes);
-                    if new_dislikes == 0 {
-                        return best_result;
+            for &(e_id, dst) in forward_edges[v].iter() {
+                edges_consumed[dst] -= 1;
+                // Go over deltas precalcs here.
+                let bounds = &edge_precalc[e_id];
+                for d in bounds.0..=bounds.1 {
+                    for delta in delta_precalc[d as usize].iter() {
+                        let p_dst = (p.0 + delta.0, p.1 + delta.1);
+                        if p_dst.0 < self.bbox_mn.x
+                            || p_dst.0 > self.bbox_mx.x
+                            || p_dst.1 < self.bbox_mn.y
+                            || p_dst.1 > self.bbox_mx.y
+                        {
+                            continue;
+                        }
+                        // Propagate placement information.
+                        can_place_in[dst][(p_dst.0 - self.bbox_mn.x) as usize]
+                            [(p_dst.1 - self.bbox_mn.y) as usize] -= 1;
                     }
                 }
             }
         }
-        // self.placed[v] = false;
+
+        places_list[v].replace(v_places);
         return best_result;
+
+        // if !problem.contains_point(&self.pose.vertices[v])
+        //     || !self.check_back_edges_within_hole(index, problem, back_edges)
+        // {
+        //     continue;
+        // }
     }
 }
