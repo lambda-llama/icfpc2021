@@ -45,6 +45,7 @@ impl Solver for TreeSearchSolver {
             let mut order = Vec::new();
             let mut v_in_order = vec![0; figure_size];
             let mut parents = vec![(0, 0); figure_size];
+            let mut topo_vertex_edges = vec![Vec::new(); figure_size];
             {
                 let mut visited = vec![false; figure_size];
                 topsort(
@@ -55,6 +56,7 @@ impl Solver for TreeSearchSolver {
                     &mut visited,
                     &mut parents,
                     &problem.figure.vertex_edges,
+                    &mut topo_vertex_edges,
                 );
                 for i in 0..figure_size {
                     v_in_order[order[i]] = i;
@@ -86,7 +88,7 @@ impl Solver for TreeSearchSolver {
             }
             for v in delta_precalc.iter_mut() {
                 v.dedup();
-                v.shuffle(&mut rng);
+                // v.shuffle(&mut rng);
             }
 
             let mut edge_precalc: Vec<(i64, i64)> = Vec::new();
@@ -117,6 +119,20 @@ impl Solver for TreeSearchSolver {
                     vertex_deltas[v].extend(delta_precalc[parent_d as usize].iter());
                 }
                 info!("Vectex {} degree: {}", v, vertex_deltas[v].len());
+            }
+
+            let mut vertex_cycles: Vec<Vec<Vec<usize>>> = vec![vec![Vec::new(); 0]; figure_size];
+            let mut path: Vec<usize> = Vec::new();
+            for v in 0..figure_size {
+                find_cycles(
+                    v,
+                    v,
+                    &problem.figure.vertex_edges,
+                    &topo_vertex_edges,
+                    &mut path,
+                    &mut vertex_cycles[v],
+                );
+                info!("Vectex {} cycles: {}", v, vertex_cycles[v].len());
             }
 
             let precalc_time_taken = std::time::Instant::now() - precalc_start;
@@ -183,6 +199,7 @@ fn topsort(
     visited: &mut Vec<bool>,
     parents: &mut Vec<(usize, usize)>,
     edges: &Vec<Vec<(usize, usize)>>,
+    topo_vertex_edges: &mut Vec<Vec<(usize, usize)>>,
 ) {
     visited[v] = true;
     if p.is_some() {
@@ -195,6 +212,7 @@ fn topsort(
         if visited[dst] {
             continue;
         }
+        topo_vertex_edges[v].push((edge_index, dst));
 
         topsort(
             dst,
@@ -203,9 +221,31 @@ fn topsort(
             order,
             visited,
             parents,
-            &edges,
+            edges,
+            topo_vertex_edges,
         );
     }
+}
+
+fn find_cycles(
+    start_v: usize,
+    v: usize,
+    edges: &Vec<Vec<(usize, usize)>>,
+    topo_vertex_edges: &Vec<Vec<(usize, usize)>>,
+    path: &mut Vec<usize>,
+    cycles: &mut Vec<Vec<usize>>,
+) {
+    path.push(v);
+    for &(_, dst) in &edges[v] {
+        if dst == start_v {
+            cycles.push(path.clone());
+        }
+    }
+
+    for &(_, dst) in &topo_vertex_edges[v] {
+        find_cycles(start_v, dst, edges, topo_vertex_edges, path, cycles);
+    }
+    path.pop();
 }
 
 struct SearchRunner<'a> {
