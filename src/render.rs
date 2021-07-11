@@ -581,7 +581,10 @@ pub fn interact<'a>(
             state.viewport_drag_point = None;
         }
 
-        if rh.get_gesture_detected() == GestureType::GESTURE_DRAG {
+        if rh.get_gesture_detected() == GestureType::GESTURE_DRAG
+            || rh.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON)
+            || rh.is_mouse_button_down(MouseButton::MOUSE_RIGHT_BUTTON)
+        {
             if let Some(p) = state.viewport_drag_point {
                 let delta = mouse_pos - p;
                 state.translator.x_offset += delta.x;
@@ -595,8 +598,7 @@ pub fn interact<'a>(
                     for &idx in state.selected_points.iter() {
                         vertices[idx] = vertices[idx] + diff_p;
                     }
-                }
-                if let Some(p) = state.rotate_pivot {
+                } else if let Some(p) = state.rotate_pivot {
                     let angle = geomath::vector::Vector2::new(
                         (mouse_p.x - p.x) as f64,
                         (mouse_p.y - p.y) as f64,
