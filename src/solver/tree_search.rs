@@ -1,5 +1,9 @@
 use generator::Scope;
 use std::{cell::RefCell, rc::Rc};
+use rand::thread_rng;
+use rand::seq::SliceRandom;
+use rand::rngs::StdRng;
+use rand::Rng;
 
 use crate::common::*;
 use crate::problem::*;
@@ -21,6 +25,7 @@ impl Solver for TreeSearchSolver {
             Some(timeout) => Some(std::time::Instant::now() + timeout),
             None => None,
         };
+        let mut rng: StdRng = rand::SeedableRng::seed_from_u64(42);
 
         generator::Gn::new_scoped_local(move |mut s| {
             s.yield_(pose.clone());
@@ -83,6 +88,7 @@ impl Solver for TreeSearchSolver {
             }
             for v in delta_precalc.iter_mut() {
                 v.dedup();
+                v.shuffle(&mut rng);
             }
 
             let mut edge_precalc: Vec<(i64, i64)> = Vec::new();
