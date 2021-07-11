@@ -190,7 +190,7 @@ fn render_gui(
     // Help bar
     const HELP_BAR_HEIGHT: f32 = 51.0;
     let mut text = b"\
-Tools: Q - Pull, E - Center Illegal, Shift+E - Center All, C - Flip Horz, V - Flip Vert, W - Fold (hold), R - Rotate (hold)\n\
+Tools: Q - Pull, Shift+Q - Push, E - Center Illegal, Shift+E - Center All, C - Flip Horz, V - Flip Vert, W - Fold (hold), R - Rotate (hold)\n\
 Selection/Navigation: Ctrl+A - Select All, Shift adds, Ctrl removes, Z - Select Adjacent, X - Invert Selection, RMB - Drag Viewport, Scrollwheel - Zoom
 Misc: S - Save, D - Step Solver, F - Run Solver, Shift+L - Reset Selected, Ctrl+L - Reset Solution\n\
 "
@@ -650,8 +650,13 @@ pub fn interact<'a>(
         if let Some(key) = rh.get_key_pressed() {
             match key {
                 KeyboardKey::KEY_Q => {
-                    for &idx in &state.selected_points {
-                        pose.borrow_mut().pull(&problem.figure, idx);
+                    if rh.is_key_down(KeyboardKey::KEY_LEFT_SHIFT) {
+                        pose.borrow_mut()
+                            .push(&problem.figure, state.selected_points.clone());
+                    } else {
+                        for &idx in &state.selected_points {
+                            pose.borrow_mut().pull(&problem.figure, idx);
+                        }
                     }
                 }
                 KeyboardKey::KEY_E => {

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use geomath::prelude::coordinates::Polar;
 
 use crate::{common::PointConversion, problem::*};
@@ -10,6 +12,9 @@ pub trait Transform {
 
     // Pulls all adjacent vertices closer (to the legal length)
     fn pull(&mut self, f: &Figure, v: usize);
+
+    // Push all nodes out towards their maximum length edges
+    fn push(&mut self, f: &Figure, vs: HashSet<usize>);
 
     // "Center" a vertex by minimizing the sum of errors of its edges
     fn center(&mut self, f: &Figure, v: usize, search_region: (Point, Point));
@@ -78,12 +83,45 @@ impl Transform for Pose {
                 let mut vec =
                     geomath::vector::Vector2::new((p.x - p0.x) as f64, (p.y - p0.y) as f64);
                 vec.set_rho(f.edges[e].len2.sqrt());
-                dbg!(vec.rho());
                 self.vertices[v] = Point {
                     x: p0.x + vec.x as i64,
                     y: p0.y + vec.y as i64,
                 }
             }
+        }
+    }
+
+    fn push(&mut self, f: &Figure, mut vs: HashSet<usize>) {
+        loop {
+            let mut any_changed = false;
+            let mut next_set = HashSet::new();
+            for &v in &vs {
+                let longest_outside_edge = f.vertex_edges[v]
+                    .iter()
+                    .filter(|(_e, v)| !vs.contains(v))
+                    .filter(|(e, _v)| f.test_edge_len2(*e, self) == EdgeTestResult::TooLong)
+                    .max_by_key(|(e, _v)| {
+                        ordered_float::NotNan::new(f.edge_len2(*e, self)).unwrap()
+                    });
+                if let Some((e, v0)) = longest_outside_edge {
+                    let p0 = self.vertices[*v0];
+                    let p = self.vertices[v];
+                    let mut vec =
+                        geomath::vector::Vector2::new((p.x - p0.x) as f64, (p.y - p0.y) as f64);
+                    vec.set_rho(f.edges[*e].len2.sqrt());
+                    self.vertices[v] = Point {
+                        x: p0.x + vec.x as i64,
+                        y: p0.y + vec.y as i64,
+                    };
+                    any_changed = true;
+                } else {
+                    next_set.insert(v);
+                }
+            }
+            if !any_changed {
+                return;
+            }
+            vs = next_set;
         }
     }
 
