@@ -409,10 +409,10 @@ impl<'a> SearchRunner<'a> {
             return Some(dislikes);
         }
 
-        if self.pose.vertices.len() - index < problem.hole.len() - *covered_points_on_hole {
-            // Can't cover all points on hole!
-            return None;
-        }
+        // if self.pose.vertices.len() - index < problem.hole.len() - *covered_points_on_hole {
+        //     // Can't cover all points on hole!
+        //     return None;
+        // }
 
         let v = self.order[index];
 
@@ -429,18 +429,18 @@ impl<'a> SearchRunner<'a> {
 
             self.pose.vertices[v] = Point { x: p.0, y: p.1 };
 
-            if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize][(p.1 - self.bbox_mn.y) as usize]
-                > 0
-            {
-                point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
-                    [(p.1 - self.bbox_mn.y) as usize] += 1;
-                if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
-                    [(p.1 - self.bbox_mn.y) as usize]
-                    == 2
-                {
-                    *covered_points_on_hole += 1;
-                }
-            }
+            // if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize][(p.1 - self.bbox_mn.y) as usize]
+            //     > 0
+            // {
+            //     point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+            //         [(p.1 - self.bbox_mn.y) as usize] += 1;
+            //     if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+            //         [(p.1 - self.bbox_mn.y) as usize]
+            //         == 2
+            //     {
+            //         *covered_points_on_hole += 1;
+            //     }
+            // }
 
             let mut can_continue_placement = true;
             for &(e_id, dst) in forward_edges[v].iter() {
@@ -541,18 +541,18 @@ impl<'a> SearchRunner<'a> {
                 self.terminate = false;
             }
 
-            if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize][(p.1 - self.bbox_mn.y) as usize]
-                > 0
-            {
-                point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
-                    [(p.1 - self.bbox_mn.y) as usize] -= 1;
-                if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
-                    [(p.1 - self.bbox_mn.y) as usize]
-                    == 1
-                {
-                    *covered_points_on_hole -= 1;
-                }
-            }
+            // if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize][(p.1 - self.bbox_mn.y) as usize]
+            //     > 0
+            // {
+            //     point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+            //         [(p.1 - self.bbox_mn.y) as usize] -= 1;
+            //     if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+            //         [(p.1 - self.bbox_mn.y) as usize]
+            //         == 1
+            //     {
+            //         *covered_points_on_hole -= 1;
+            //     }
+            // }
 
             for &(e_id, dst) in forward_edges[v].iter() {
                 edges_consumed[dst] -= 1;
