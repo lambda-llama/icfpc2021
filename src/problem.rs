@@ -173,6 +173,8 @@ pub struct Problem {
     pub hole: Vec<Point>,
     pub poly: geo::Polygon<f64>,
     inside_points: Vec<Vec<bool>>,
+    bbox_min: Point,
+    bbox_max: Point,
     inside_segments: HashSet<(Point, Point)>,
     pub figure: Figure,
     pub bonuses: Vec<BonusUnlock>,
@@ -192,13 +194,14 @@ impl Problem {
         let poly = geo::Polygon::new(geo::LineString::from(border), vec![]);
 
         let (mn, mx) = bounding_box(&hole);
-        let mut inside_points = vec![vec![false; mx.y as usize + 1]; mx.x as usize + 1];
+        let mut inside_points =
+            vec![vec![false; (mx.y - mn.y) as usize + 1]; (mx.x - mn.x) as usize + 1];
         let mut inside_segments = HashSet::new();
         for x in mn.x..=mx.x {
             for y in mn.y..=mx.y {
                 let p = Point { x, y };
                 if is_point_belongs_to_poly(&poly, p) {
-                    inside_points[p.x as usize][p.y as usize] = true;
+                    inside_points[(p.x - mn.x) as usize][(p.y - mn.y) as usize] = true;
                     // TODO: Currently it slows down startup of the render mode. We need to do it in a lazy way.
                     // for &q in &inside_points {
                     //     if is_segment_belongs_to_poly(&poly, (p, q)) {
@@ -214,6 +217,8 @@ impl Problem {
             hole: hole,
             poly: poly,
             inside_points: inside_points,
+            bbox_min: mn,
+            bbox_max: mx,
             inside_segments: inside_segments,
             figure: figure,
             bonuses,
@@ -294,14 +299,14 @@ impl Problem {
     }
 
     pub fn contains_point(&self, p: &Point) -> bool {
-        if p.x < 0
-            || p.x >= self.inside_points.len() as i64
-            || p.y < 0
-            || p.y >= self.inside_points[0].len() as i64
+        if p.x < self.bbox_min.x
+            || p.x > self.bbox_max.x
+            || p.y < self.bbox_min.y
+            || p.y > self.bbox_max.y
         {
             return false;
         }
-        self.inside_points[p.x as usize][p.y as usize]
+        self.inside_points[(p.x - self.bbox_min.x) as usize][(p.y - self.bbox_min.y) as usize]
     }
 
     pub fn contains_segment(&self, (a, b): (Point, Point)) -> bool {
