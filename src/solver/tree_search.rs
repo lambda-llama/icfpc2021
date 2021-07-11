@@ -19,6 +19,9 @@ impl Solver for TreeSearchSolver {
             s.yield_(pose.clone());
 
             let figure_size = problem.figure.vertices.len();
+            if figure_size > 20 {
+                done!();
+            }
 
             let start_vertex = 0;
             // for i in 0..figure_size {
@@ -91,6 +94,7 @@ impl Solver for TreeSearchSolver {
                 best_dislikes: None,
                 last_log_time: std::time::Instant::now(),
                 iterations: 0,
+                terminate: false,
                 scope: s,
             };
 
@@ -112,6 +116,7 @@ impl Solver for TreeSearchSolver {
                             &delta_precalc,
                             &edge_precalc,
                             &back_edges,
+                            &(std::time::Instant::now() + std::time::Duration::from_secs(60)),
                         );
                         if result.is_some() {
                             if result.unwrap() == 0 {
@@ -171,6 +176,7 @@ struct SearchRunner<'a> {
     best_dislikes: Option<u64>,
     last_log_time: std::time::Instant,
     iterations: u64,
+    terminate: bool,
     scope: Scope<'a, (), Rc<RefCell<Pose>>>,
 }
 
@@ -182,7 +188,12 @@ impl<'a> SearchRunner<'a> {
         delta_precalc: &Vec<Vec<(i64, i64)>>,
         edge_precalc: &Vec<(i64, i64)>,
         back_edges: &Vec<Vec<(usize, usize)>>,
+        deadline: &std::time::Instant,
     ) -> Option<u64> {
+        if self.terminate {
+            return None;
+        }
+
         self.iterations += 1;
         if self.iterations >= 50000 {
             let log_time = std::time::Instant::now();
@@ -191,6 +202,11 @@ impl<'a> SearchRunner<'a> {
                 "Iterations per second: {}",
                 (self.iterations as u128 * 1000) / time_taken.as_millis()
             );
+            // Set a 1 minute deadline.
+            if log_time > *deadline {
+                self.terminate = true;
+                return None;
+            }
             self.iterations = 0;
             self.last_log_time = log_time;
         }
@@ -258,7 +274,7 @@ impl<'a> SearchRunner<'a> {
                 }
 
                 if let Some(new_dislikes) =
-                    self.place_vertices(index + 1, problem, delta_precalc, edge_precalc, back_edges)
+                    self.place_vertices(index + 1, problem, delta_precalc, edge_precalc, back_edges, deadline)
                 {
                     if best_result.unwrap_or(1000000) > new_dislikes {
                         best_result = Some(new_dislikes);
