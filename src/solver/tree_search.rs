@@ -121,8 +121,10 @@ impl Solver for TreeSearchSolver {
                 info!("Vectex {} degree: {}", v, vertex_deltas[v].len());
             }
 
-            let mut vertex_cycles: Vec<Vec<Vec<usize>>> = vec![vec![Vec::new(); 0]; figure_size];
-            let mut path: Vec<usize> = Vec::new();
+            // Each cycle is a sequence of (destination_vertex, edge_index_leading_to_it).
+            let mut vertex_cycles: Vec<Vec<Vec<(usize, usize)>>> =
+                vec![vec![Vec::new(); 0]; figure_size];
+            let mut path: Vec<(usize, usize)> = Vec::new();
             for v in 0..figure_size {
                 find_cycles(
                     v,
@@ -134,6 +136,71 @@ impl Solver for TreeSearchSolver {
                     6,
                 );
                 info!("Vectex {} cycles: {}", v, vertex_cycles[v].len());
+            }
+
+            for v in 0..figure_size {
+                for cycle in &vertex_cycles[v] {
+                    // For now only handling cycles of length 3.
+                    if cycle.len() == 3 {
+                        let v1 = cycle[0].0;
+                        let v2 = cycle[1].0;
+                        let back_edge_index = cycle[2].1;
+
+                        // Find feasible deltas.
+                        let mut delta_v1_is_feasible = vec![false; vertex_deltas[v1].len()];
+                        let mut delta_v2_is_feasible = vec![false; vertex_deltas[v2].len()];
+                        for (delta_v1_idx, delta_v1) in vertex_deltas[v1].iter().enumerate() {
+                            for (delta_v2_idx, delta_v2) in vertex_deltas[v2].iter().enumerate() {
+                                let mut deltas_are_feasible = false;
+                                let delta = (delta_v1.0 + delta_v2.0, delta_v1.1 + delta_v2.1);
+                                // TODO: Replace this check with a lookup to a hashtable.
+                                let parent_bounds = &edge_precalc[back_edge_index];
+                                for parent_d in parent_bounds.0..=parent_bounds.1 {
+                                    for back_delta in delta_precalc[parent_d as usize].iter() {
+                                        if delta.0 + back_delta.0 == 0
+                                            && delta.1 + back_delta.1 == 0
+                                        {
+                                            deltas_are_feasible = true;
+                                            break;
+                                        }
+                                    }
+                                    if deltas_are_feasible {
+                                        break;
+                                    }
+                                }
+
+                                if deltas_are_feasible {
+                                    delta_v1_is_feasible[delta_v1_idx] = true;
+                                    delta_v2_is_feasible[delta_v2_idx] = true;
+                                }
+                            }
+                        }
+                        // Narrow down vertex deltas to feasible ones for v1.
+                        let mut new_v1_deltas = Vec::new();
+                        for (delta_v1_idx, delta_v1) in vertex_deltas[v1].iter().enumerate() {
+                            if delta_v1_is_feasible[delta_v1_idx] {
+                                new_v1_deltas.push(*delta_v1);
+                            }
+                        }
+                        vertex_deltas[v1] = new_v1_deltas;
+                        // Narrow down vertex deltas to feasible ones for v2.
+                        let mut new_v2_deltas = Vec::new();
+                        for (delta_v2_idx, delta_v2) in vertex_deltas[v2].iter().enumerate() {
+                            if delta_v2_is_feasible[delta_v2_idx] {
+                                new_v2_deltas.push(*delta_v2);
+                            }
+                        }
+                        vertex_deltas[v2] = new_v2_deltas;
+                    }
+                }
+            }
+
+            for v in 0..figure_size {
+                // Starting vertex has no parent, so skipping for now.
+                if v == start_vertex {
+                    continue;
+                }
+                info!("Vectex {} degree after pruning: {}", v, vertex_deltas[v].len());
             }
 
             let precalc_time_taken = std::time::Instant::now() - precalc_start;
@@ -233,25 +300,35 @@ fn find_cycles(
     v: usize,
     edges: &Vec<Vec<(usize, usize)>>,
     topo_vertex_edges: &Vec<Vec<(usize, usize)>>,
-    path: &mut Vec<usize>,
-    cycles: &mut Vec<Vec<usize>>,
+    path: &mut Vec<(usize, usize)>,
+    cycles: &mut Vec<Vec<(usize, usize)>>,
     max_depth: usize,
 ) {
     if path.len() > max_depth {
         return;
     }
 
-    path.push(v);
-    for &(_, dst) in &edges[v] {
+    for &(edge_index, dst) in &edges[v] {
         if dst == start_v {
+            path.push((dst, edge_index));
             cycles.push(path.clone());
+            path.pop();
         }
     }
 
-    for &(_, dst) in &topo_vertex_edges[v] {
-        find_cycles(start_v, dst, edges, topo_vertex_edges, path, cycles, max_depth);
+    for &(edge_index, dst) in &topo_vertex_edges[v] {
+        path.push((dst, edge_index));
+        find_cycles(
+            start_v,
+            dst,
+            edges,
+            topo_vertex_edges,
+            path,
+            cycles,
+            max_depth,
+        );
+        path.pop();
     }
-    path.pop();
 }
 
 struct SearchRunner<'a> {

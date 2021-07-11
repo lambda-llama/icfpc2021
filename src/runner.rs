@@ -18,7 +18,8 @@ pub fn run(solver_name: Option<&str>, id: Option<u32>) -> Result<()> {
             let mut stdout = String::new();
             let problem = storage::load_problem(i)?;
             let current_solution = storage::load_solution(i)?;
-            if current_solution
+            // Only filter solved solutions in "Solve all" mode.
+            if id.is_none() && current_solution
                 .as_ref()
                 .map(|s| s.state.optimal)
                 .unwrap_or_default()
