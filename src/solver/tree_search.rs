@@ -189,6 +189,11 @@ impl<'a> SearchRunner<'a> {
         }
         debug!("Placing vertex {}", index);
         if index == problem.figure.vertices.len() {
+            // TODO: Make this incremental.
+            if !problem.contains(&self.pose) {
+                return None;
+            }
+
             let dislikes = problem.dislikes(&self.pose);
 
             if self.best_dislikes.unwrap_or(10000000) > dislikes {
