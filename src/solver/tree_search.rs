@@ -104,6 +104,21 @@ impl Solver for TreeSearchSolver {
                 }
             }
 
+            let mut vertex_deltas: Vec<Vec<(i64, i64)>> = vec![Vec::new(); figure_size];
+            for v in 0..figure_size {
+                // Starting vertex has no parent, so skipping for now.
+                if v == start_vertex {
+                    continue;
+                }
+
+                let (_, parent_edge_index) = parents[v];
+                let parent_bounds = &edge_precalc[parent_edge_index];
+                for parent_d in parent_bounds.0..=parent_bounds.1 {
+                    vertex_deltas[v].extend(delta_precalc[parent_d as usize].iter());
+                }
+                info!("Vectex {} degree: {}", v, vertex_deltas[v].len());
+            }
+
             let precalc_time_taken = std::time::Instant::now() - precalc_start;
             info!(
                 "Precalc duration: {}.{}s",
