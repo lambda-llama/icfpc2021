@@ -19,10 +19,11 @@ pub fn run(solver_name: Option<&str>, id: Option<u32>) -> Result<()> {
             let problem = storage::load_problem(i)?;
             let current_solution = storage::load_solution(i)?;
             // Only filter solved solutions in "Solve all" mode.
-            if id.is_none() && current_solution
-                .as_ref()
-                .map(|s| s.state.optimal)
-                .unwrap_or_default()
+            if id.is_none()
+                && current_solution
+                    .as_ref()
+                    .map(|s| s.state.optimal)
+                    .unwrap_or_default()
             {
                 warn!("Skipping problem {} as it's been solved optimally", i);
                 return Ok(());
