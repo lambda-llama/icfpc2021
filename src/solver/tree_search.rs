@@ -37,12 +37,15 @@ impl Solver for TreeSearchSolver {
 
             let (mn, mx) = problem.bounding_box();
 
-            let start_vertex = 0;
-            // for i in 0..figure_size {
-            //     if problem.figure.vertex_edges[i].len() > problem.figure.vertex_edges[start_vertex].len() {
-            //         start_vertex = i;
-            //     }
-            // }
+            let mut start_vertex = 0;
+            // Find min degree vertex.
+            for i in 0..figure_size {
+                if problem.figure.vertex_edges[i].len()
+                    < problem.figure.vertex_edges[start_vertex].len()
+                {
+                    start_vertex = i;
+                }
+            }
 
             let mut order = Vec::new();
             let mut v_in_order = vec![0; figure_size];
@@ -149,9 +152,15 @@ impl Solver for TreeSearchSolver {
 
                     // Do initial placing in coordinates.
                     // TODO: Can we process them in some clever order?
-                    places_list[start_vertex].borrow_mut().push((x, y));
+                    // places_list[start_vertex].borrow_mut().push((x, y));
                 }
             }
+
+            // Try to place the starting vertex in one of the hole vertices.
+            for p in &problem.hole {
+                places_list[start_vertex].borrow_mut().push((p.x, p.y));
+            }
+
 
             //             // Each cycle is a sequence of (destination_vertex, edge_index_leading_to_it).
             //             let mut vertex_cycles: Vec<Vec<Vec<(usize, usize)>>> =
@@ -354,19 +363,21 @@ impl<'a> SearchRunner<'a> {
         self.iterations += 1;
         if self.iterations >= 50000 {
             let log_time = std::time::Instant::now();
-            let time_taken = log_time - self.last_log_time;
-            info!(
-                "Iterations per second: {}",
-                (self.iterations as u128 * 1000) / time_taken.as_millis()
-            );
             if deadline.is_some() {
                 if log_time > deadline.unwrap() {
                     self.terminate = true;
                     return None;
                 }
             }
-            self.iterations = 0;
-            self.last_log_time = log_time;
+            let time_taken = log_time - self.last_log_time;
+            if time_taken > std::time::Duration::from_secs(10) {
+                info!(
+                    "Iterations per second: {}",
+                    (self.iterations as u128 * 1000) / time_taken.as_millis()
+                );
+                self.iterations = 0;
+                self.last_log_time = log_time;
+            }
         }
         debug!("Placing vertex {}", index);
         if index == problem.figure.vertices.len() {
