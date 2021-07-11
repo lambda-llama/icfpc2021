@@ -81,6 +81,14 @@ impl Figure {
         }
     }
 
+    pub fn get_default_pose(&self) -> Pose {
+        Pose {
+            vertices: self.vertices.clone(),
+            bonuses: vec![],
+            optimal: None,
+        }
+    }
+
     pub fn distance_squared(p: Point, q: Point) -> f64 {
         ((p.x - q.x) as f64).powi(2) + ((p.y - q.y) as f64).powi(2)
     }
@@ -397,6 +405,7 @@ pub struct BonusUse {
 pub struct Pose {
     pub vertices: Vec<Point>,
     pub bonuses: Vec<BonusUse>,
+    pub optimal: Option<bool>,
 }
 
 impl Pose {
@@ -414,6 +423,7 @@ impl Pose {
                     problem: b.problem,
                 })
                 .collect(),
+            optimal: None,
         })
     }
 
@@ -460,14 +470,6 @@ pub struct SolutionState {
 }
 
 impl SolutionState {
-    pub fn new() -> Self {
-        SolutionState {
-            dislikes: u64::MAX,
-            valid: false,
-            optimal: false,
-        }
-    }
-
     pub fn from_json(data: &[u8]) -> Result<Self> {
         Ok(serde_json::from_slice(data)?)
     }

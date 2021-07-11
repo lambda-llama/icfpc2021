@@ -448,10 +448,7 @@ pub fn interact<'a>(
 
     let pose = match solution_path {
         Some(p) => storage::load_custom_solution(p)?,
-        None => Pose {
-            vertices: problem.figure.vertices.clone(),
-            bonuses: vec![],
-        },
+        None => problem.figure.get_default_pose(),
     };
 
     let mut gen = state
@@ -472,10 +469,7 @@ pub fn interact<'a>(
                 problem = state.load_problem()?;
                 gen = state.solver.solve_gen(
                     problem.clone(),
-                    Rc::new(RefCell::new(Pose {
-                        vertices: problem.figure.vertices.clone(),
-                        bonuses: vec![],
-                    })),
+                    Rc::new(RefCell::new(problem.figure.get_default_pose())),
                 );
                 pose = gen.resume().unwrap();
             }
@@ -692,10 +686,7 @@ pub fn interact<'a>(
                 KeyboardKey::KEY_L if rh.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) => {
                     gen = state.solver.solve_gen(
                         problem.clone(),
-                        Rc::new(RefCell::new(Pose {
-                            vertices: problem.figure.vertices.clone(),
-                            bonuses: vec![],
-                        })),
+                        Rc::new(RefCell::new(problem.figure.get_default_pose())),
                     );
                     pose = gen.resume().unwrap();
                 }

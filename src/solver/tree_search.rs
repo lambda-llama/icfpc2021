@@ -1,9 +1,9 @@
 use generator::Scope;
-use std::{cell::RefCell, rc::Rc};
-use rand::thread_rng;
-use rand::seq::SliceRandom;
 use rand::rngs::StdRng;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use rand::Rng;
+use std::{cell::RefCell, rc::Rc};
 
 use crate::common::*;
 use crate::problem::*;
@@ -65,10 +65,8 @@ impl Solver for TreeSearchSolver {
             let mut max_delta: usize = 0;
             for &p1 in &problem.hole {
                 for &p2 in &problem.hole {
-                    max_delta = std::cmp::max(
-                        max_delta,
-                        Figure::distance_squared_int(p1, p2) as usize,
-                    );
+                    max_delta =
+                        std::cmp::max(max_delta, Figure::distance_squared_int(p1, p2) as usize);
                 }
             }
             info!("Max delta: {}", max_delta);
@@ -147,6 +145,7 @@ impl Solver for TreeSearchSolver {
                         );
                         if result.is_some() {
                             if result.unwrap() == 0 {
+                                // TODO: optionally yield pose with optimal = Some(true)
                                 done!();
                             }
                         }
@@ -155,6 +154,7 @@ impl Solver for TreeSearchSolver {
                 }
             }
 
+            // TODO: optionally yield pose with optimal = Some(true)
             done!();
         })
     }
@@ -301,9 +301,14 @@ impl<'a> SearchRunner<'a> {
                     continue;
                 }
 
-                if let Some(new_dislikes) =
-                    self.place_vertices(index + 1, problem, delta_precalc, edge_precalc, back_edges, deadline)
-                {
+                if let Some(new_dislikes) = self.place_vertices(
+                    index + 1,
+                    problem,
+                    delta_precalc,
+                    edge_precalc,
+                    back_edges,
+                    deadline,
+                ) {
                     if best_result.unwrap_or(1000000) > new_dislikes {
                         best_result = Some(new_dislikes);
                         if new_dislikes == 0 {

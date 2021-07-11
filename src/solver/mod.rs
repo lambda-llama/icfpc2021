@@ -18,10 +18,7 @@ pub trait Solver: Sync {
 
     fn solve(&self, problem: Problem) -> Solution {
         let id = problem.id;
-        let initial_pose = Pose {
-            vertices: problem.figure.vertices.clone(),
-            bonuses: vec![],
-        };
+        let initial_pose = problem.figure.get_default_pose();
         let pose = self
             .solve_gen(problem.clone(), Rc::new(RefCell::new(initial_pose)))
             .last()
@@ -31,7 +28,7 @@ pub trait Solver: Sync {
         let state = SolutionState {
             dislikes,
             valid: problem.validate(&pose),
-            optimal: dislikes == 0,
+            optimal: dislikes == 0 || pose.optimal.unwrap_or_default(),
         };
         Solution {
             id,
