@@ -482,7 +482,10 @@ pub fn interact<'a>(
         if rh.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             let mouse_p = state.untranslate(&mouse_pos);
             let mut continue_processing = true;
-            if let Some(h_idx) = hit_test_hole(&problem, mouse_p, 2) {
+            let v_idx = hit_test_point(&pose.borrow(), mouse_p, 2);
+            let h_idx = hit_test_hole(&problem, mouse_p, 2);
+            if h_idx.is_some() && !v_idx.is_some() {
+                let h_idx = h_idx.unwrap();
                 let mut desired = vec![];
                 for i in 0..problem.hole.len() {
                     let h1 = (h_idx + i) % problem.hole.len();
@@ -506,7 +509,6 @@ pub fn interact<'a>(
                 }
             }
             if continue_processing {
-                let v_idx = hit_test_point(&pose.borrow(), mouse_p, 2);
                 if rh.is_key_down(KeyboardKey::KEY_R) {
                     state.rotate_pivot = Some(mouse_p);
                     state.rotate_vertices_copy = pose.borrow().vertices.clone();
