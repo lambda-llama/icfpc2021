@@ -450,7 +450,12 @@ pub fn interact<'a>(
 
     let pose = match solution_path {
         Some(p) => storage::load_custom_solution(p)?,
-        None => problem.figure.get_default_pose(),
+        None => {
+            let solution = storage::load_solution(id)?;
+            solution
+                .map(|s| s.pose)
+                .unwrap_or_else(|| problem.figure.get_default_pose())
+        }
     };
 
     let mut gen = state
@@ -469,10 +474,13 @@ pub fn interact<'a>(
             if selected_problem != -1 && state.problems_selected != selected_problem {
                 state.problems_selected = selected_problem;
                 problem = state.load_problem()?;
-                gen = state.solver.solve_gen(
-                    problem.clone(),
-                    Rc::new(RefCell::new(problem.figure.get_default_pose())),
-                );
+                let solution = storage::load_solution(problem.id)?;
+                let initial_pose = solution
+                    .map(|s| s.pose)
+                    .unwrap_or_else(|| problem.figure.get_default_pose());
+                gen = state
+                    .solver
+                    .solve_gen(problem.clone(), Rc::new(RefCell::new(initial_pose)));
                 pose = gen.resume().unwrap();
             }
         }
