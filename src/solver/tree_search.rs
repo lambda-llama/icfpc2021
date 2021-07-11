@@ -460,21 +460,21 @@ impl<'a> SearchRunner<'a> {
             }
             if can_continue_placement {
                 // Validate that the placement is not breaking any edges.
-                let mut has_violations = false;
-                for &(e_id, dst) in back_edges[v].iter() {
-                    let d = Figure::distance_squared_int(
-                        self.pose.vertices[v],
-                        self.pose.vertices[dst],
-                    );
-                    // Go over deltas precalcs here.
-                    let bounds = &edge_precalc[e_id];
-                    // Broken edge, placement is invalid, returning.
-                    if d < bounds.0 || d > bounds.1 {
-                        info!("Bounds violated with {}, {} out of {:?}", dst, d, bounds);
-                        has_violations = true;
-                        break;
-                    }
-                }
+                // let mut has_violations = false;
+                // for &(e_id, dst) in back_edges[v].iter() {
+                //     let d = Figure::distance_squared_int(
+                //         self.pose.vertices[v],
+                //         self.pose.vertices[dst],
+                //     );
+                //     // Go over deltas precalcs here.
+                //     let bounds = &edge_precalc[e_id];
+                //     // Broken edge, placement is invalid, returning.
+                //     if d < bounds.0 || d > bounds.1 {
+                //         info!("Bounds violated with {}, {} out of {:?}", dst, d, bounds);
+                //         has_violations = true;
+                //         break;
+                //     }
+                // }
 
                 // Dive deeper.
                 let child_deadline = match index {
