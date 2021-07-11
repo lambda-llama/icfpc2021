@@ -131,6 +131,7 @@ impl Solver for TreeSearchSolver {
                     &topo_vertex_edges,
                     &mut path,
                     &mut vertex_cycles[v],
+                    6,
                 );
                 info!("Vectex {} cycles: {}", v, vertex_cycles[v].len());
             }
@@ -234,7 +235,12 @@ fn find_cycles(
     topo_vertex_edges: &Vec<Vec<(usize, usize)>>,
     path: &mut Vec<usize>,
     cycles: &mut Vec<Vec<usize>>,
+    max_depth: usize,
 ) {
+    if path.len() > max_depth {
+        return;
+    }
+
     path.push(v);
     for &(_, dst) in &edges[v] {
         if dst == start_v {
@@ -243,7 +249,7 @@ fn find_cycles(
     }
 
     for &(_, dst) in &topo_vertex_edges[v] {
-        find_cycles(start_v, dst, edges, topo_vertex_edges, path, cycles);
+        find_cycles(start_v, dst, edges, topo_vertex_edges, path, cycles, max_depth);
     }
     path.pop();
 }
