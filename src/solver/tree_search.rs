@@ -21,31 +21,28 @@ impl Solver for TreeSearchSolver {
         mut problem: Problem,
         pose: Rc<RefCell<Pose>>,
     ) -> generator::LocalGenerator<'a, (), Rc<RefCell<Pose>>> {
-        let deadline = match self.timeout {
-            Some(timeout) => Some(std::time::Instant::now() + timeout),
-            None => None,
-        };
+        let timeout = self.timeout;
         let mut rng: StdRng = rand::SeedableRng::seed_from_u64(42);
 
         generator::Gn::new_scoped_local(move |mut s| {
             s.yield_(pose.clone());
 
             let figure_size = problem.figure.vertices.len();
-            if figure_size > 100 {
+            if figure_size > 50 {
                 done!();
             }
 
             let (mn, mx) = problem.bounding_box();
 
-            let mut start_vertex = 0;
+            let mut start_vertex = 1;
             // Find min degree vertex.
-            for i in 0..figure_size {
-                if problem.figure.vertex_edges[i].len()
-                    < problem.figure.vertex_edges[start_vertex].len()
-                {
-                    start_vertex = i;
-                }
-            }
+            // for i in 0..figure_size {
+            //     if problem.figure.vertex_edges[i].len()
+            //         < problem.figure.vertex_edges[start_vertex].len()
+            //     {
+            //         start_vertex = i;
+            //     }
+            // }
 
             let mut order = Vec::new();
             let mut v_in_order = vec![0; figure_size];
@@ -78,7 +75,7 @@ impl Solver for TreeSearchSolver {
                 }
             }
             info!("Max delta: {}", max_delta);
-            let mut delta_precalc: Vec<Vec<(i64, i64)>> = vec![Vec::new(); max_delta + 1];
+            let mut delta_precalc: Vec<Vec<(i64, i64)>> = vec![Vec::new(); max_delta + 10];
             let delta_sqrt = ((max_delta as f64).sqrt().ceil()) as i64 + 5;
             for dx in 0..=delta_sqrt {
                 for dy in 0..=delta_sqrt {
@@ -94,7 +91,7 @@ impl Solver for TreeSearchSolver {
             }
             for v in delta_precalc.iter_mut() {
                 v.dedup();
-                // v.shuffle(&mut rng);
+                v.shuffle(&mut rng);
             }
 
             let mut edge_precalc: Vec<(i64, i64)> = Vec::new();
@@ -205,7 +202,9 @@ impl Solver for TreeSearchSolver {
                 parents,
                 pose: pose.borrow().clone(),
                 best_dislikes: None,
+                start_time: std::time::Instant::now(),
                 last_log_time: std::time::Instant::now(),
+                timeout: timeout,
                 iterations: 0,
                 terminate: false,
                 bbox_mn: mn,
@@ -223,7 +222,7 @@ impl Solver for TreeSearchSolver {
                 &back_edges,
                 &forward_edges,
                 &delta_precalc,
-                &deadline,
+                None,
             );
             if result.is_some() {
                 if result.unwrap() == 0 {
@@ -319,7 +318,9 @@ struct SearchRunner<'a> {
     parents: Vec<(usize, usize)>,
     pose: Pose,
     best_dislikes: Option<u64>,
+    start_time: std::time::Instant,
     last_log_time: std::time::Instant,
+    timeout: Option<std::time::Duration>,
     iterations: u64,
     terminate: bool,
     bbox_mn: Point,
@@ -354,7 +355,7 @@ impl<'a> SearchRunner<'a> {
         back_edges: &Vec<Vec<(usize, usize)>>,
         forward_edges: &Vec<Vec<(usize, usize)>>,
         delta_precalc: &Vec<Vec<(i64, i64)>>,
-        deadline: &Option<std::time::Instant>,
+        deadline: Option<std::time::Instant>,
     ) -> Option<u64> {
         if self.terminate {
             return None;
@@ -382,9 +383,9 @@ impl<'a> SearchRunner<'a> {
         debug!("Placing vertex {}", index);
         if index == problem.figure.vertices.len() {
             // TODO: Make this incremental.
-            // if !problem.contains(&self.pose) {
-            //     return None;
-            // }
+            if !problem.contains(&self.pose) {
+                return None;
+            }
 
             let dislikes = problem.dislikes(&self.pose);
 
@@ -403,7 +404,11 @@ impl<'a> SearchRunner<'a> {
         let v_places = places_list[v].take();
 
         for p in v_places.iter() {
-            debug!("Placed vertex {} in ({}, {})", v, p.0, p.1);
+            if index == 0 {
+                info!("Placed vertex {} in ({}, {})", v, p.0, p.1);
+            } else {
+                debug!("Placed vertex {} in ({}, {})", v, p.0, p.1);
+            }
             self.pose.vertices[v] = Point { x: p.0, y: p.1 };
 
             let mut can_continue_placement = true;
@@ -452,6 +457,16 @@ impl<'a> SearchRunner<'a> {
             }
             if can_continue_placement {
                 // Dive deeper.
+                let child_deadline = match index {
+                    0 => {
+                        match self.timeout {
+                            Some(timeout) => Some(std::time::Instant::now() + 
+                                std::time::Duration::from_secs_f32(timeout.as_secs_f32() / v_places.len() as f32)),
+                            None => None,
+                        }
+                    },
+                    _ => deadline,
+                };
                 if let Some(new_dislikes) = self.place_vertices(
                     index + 1,
                     problem,
@@ -462,7 +477,7 @@ impl<'a> SearchRunner<'a> {
                     back_edges,
                     forward_edges,
                     delta_precalc,
-                    deadline,
+                    child_deadline,
                 ) {
                     if best_result.unwrap_or(1000000) > new_dislikes {
                         best_result = Some(new_dislikes);
@@ -471,6 +486,7 @@ impl<'a> SearchRunner<'a> {
                         }
                     }
                 }
+                self.terminate = false;
             }
 
             for &(e_id, dst) in forward_edges[v].iter() {
