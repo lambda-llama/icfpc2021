@@ -15,6 +15,8 @@ pub struct TreeSearchSolver {
     pub timeout: Option<std::time::Duration>,
 }
 
+const ENABLE_POINTS_IN_HOLE: bool = true;
+
 impl Solver for TreeSearchSolver {
     fn solve_gen<'a>(
         &self,
@@ -408,10 +410,12 @@ impl<'a> SearchRunner<'a> {
             return Some(dislikes);
         }
 
-        // if self.pose.vertices.len() - index < problem.hole.len() - *covered_points_on_hole {
-        //     // Can't cover all points on hole!
-        //     return None;
-        // }
+        if ENABLE_POINTS_IN_HOLE {
+            if self.pose.vertices.len() - index + 3 < problem.hole.len() - *covered_points_on_hole {
+                // Can't cover all points on hole!
+                return None;
+            }
+        }
 
         let v = self.order[index];
 
@@ -428,18 +432,21 @@ impl<'a> SearchRunner<'a> {
 
             self.pose.vertices[v] = Point { x: p.0, y: p.1 };
 
-            // if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize][(p.1 - self.bbox_mn.y) as usize]
-            //     > 0
-            // {
-            //     point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
-            //         [(p.1 - self.bbox_mn.y) as usize] += 1;
-            //     if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
-            //         [(p.1 - self.bbox_mn.y) as usize]
-            //         == 2
-            //     {
-            //         *covered_points_on_hole += 1;
-            //     }
-            // }
+            if ENABLE_POINTS_IN_HOLE {
+                if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+                    [(p.1 - self.bbox_mn.y) as usize]
+                    > 0
+                {
+                    point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+                        [(p.1 - self.bbox_mn.y) as usize] += 1;
+                    if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+                        [(p.1 - self.bbox_mn.y) as usize]
+                        == 2
+                    {
+                        *covered_points_on_hole += 1;
+                    }
+                }
+            }
 
             let mut can_continue_placement = true;
             let mut break_point = 0;
@@ -542,18 +549,21 @@ impl<'a> SearchRunner<'a> {
                 self.terminate = false;
             }
 
-            // if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize][(p.1 - self.bbox_mn.y) as usize]
-            //     > 0
-            // {
-            //     point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
-            //         [(p.1 - self.bbox_mn.y) as usize] -= 1;
-            //     if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
-            //         [(p.1 - self.bbox_mn.y) as usize]
-            //         == 1
-            //     {
-            //         *covered_points_on_hole -= 1;
-            //     }
-            // }
+            if ENABLE_POINTS_IN_HOLE {
+                if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+                    [(p.1 - self.bbox_mn.y) as usize]
+                    > 0
+                {
+                    point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+                        [(p.1 - self.bbox_mn.y) as usize] -= 1;
+                    if point_is_on_hole[(p.0 - self.bbox_mn.x) as usize]
+                        [(p.1 - self.bbox_mn.y) as usize]
+                        == 1
+                    {
+                        *covered_points_on_hole -= 1;
+                    }
+                }
+            }
 
             for &(e_id, dst) in forward_edges[v].iter() {
                 edges_consumed[dst] -= 1;
