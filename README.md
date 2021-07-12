@@ -19,6 +19,8 @@ The UI also allows performing various transformations on the selected vertices, 
   - Horizontal/vertical flips
   - Gradual rotation
   - Folding (requires the folding line to separate the graph components, otherwise it will just flip the pose)
+  - Highlighting the longest edge paths matching the path from the clicked vertex on the polygon
+  - Snapping the first highlighted path from the ones found (above) to the polygon (if Ctrl-clicked)
 
 Additionally, the selected solver could be run
 from the UI (single step or continuously while holding the button), and the problems can be loaded
