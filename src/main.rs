@@ -144,10 +144,15 @@ fn main() -> Result<()> {
                 println!("Problem {}: ", i);
                 println!("  Hole: {} vertices", problem.hole.len());
                 println!(
-                    "  Figure: {} vertices, {} edges, e={}",
+                    "  Figure: {} vertices, {} edges, e={}, max_score={}",
                     problem.figure.vertices.len(),
                     problem.figure.edges.len(),
-                    problem.figure.epsilon
+                    problem.figure.epsilon,
+                    ((problem.figure.vertices.len()
+                        * problem.figure.edges.len()
+                        * problem.hole.len()) as f64)
+                        .log2() as u32
+                        * 1000
                 );
             }
         }
