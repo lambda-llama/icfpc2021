@@ -81,7 +81,7 @@ impl Solver for TreeSearchSolver {
                 }
             }
             info!("Max delta: {}", max_delta);
-            let mut delta_precalc: Vec<Vec<(i64, i64)>> = vec![Vec::new(); max_delta + 10];
+            let mut delta_precalc: Vec<Vec<(i64, i64)>> = vec![Vec::new(); max_delta + 1];
             let delta_sqrt = ((max_delta as f64).sqrt().ceil()) as i64 + 5;
             for dx in 0..=delta_sqrt {
                 for dy in 0..=delta_sqrt {
@@ -101,9 +101,9 @@ impl Solver for TreeSearchSolver {
                 v.shuffle(&mut rng);
             }
 
-            let mut edge_precalc: Vec<(i64, i64)> = Vec::new();
+            let mut edge_bounds_precalc: Vec<(i64, i64)> = Vec::new();
             for edge_index in 0..problem.figure.edges.len() {
-                edge_precalc.push(problem.figure.edge_len2_bounds_int(edge_index));
+                edge_bounds_precalc.push(problem.figure.edge_len2_bounds_int(edge_index));
             }
 
             let mut edges_consumed: Vec<i16> = vec![0; figure_size];
@@ -121,21 +121,6 @@ impl Solver for TreeSearchSolver {
                 }
                 info!("{} back edges: {:?}", v, back_edges[v]);
                 info!("{} forward edges: {:?}", v, forward_edges[v]);
-            }
-
-            let mut vertex_deltas: Vec<Vec<(i64, i64)>> = vec![Vec::new(); figure_size];
-            for v in 0..figure_size {
-                // Starting vertex has no parent, so skipping for now.
-                if v == start_vertex {
-                    continue;
-                }
-
-                let (_, parent_edge_index) = parents[v];
-                let parent_bounds = &edge_precalc[parent_edge_index];
-                for parent_d in parent_bounds.0..=parent_bounds.1 {
-                    vertex_deltas[v].extend(delta_precalc[parent_d as usize].iter());
-                }
-                info!("Vectex {} degree: {}", v, vertex_deltas[v].len());
             }
 
             let lenx = mx.x - mn.x + 1;
@@ -174,35 +159,6 @@ impl Solver for TreeSearchSolver {
             //     places_list[start_vertex].borrow_mut().push((p.x, p.y));
             // }
 
-            //             // Each cycle is a sequence of (destination_vertex, edge_index_leading_to_it).
-            //             let mut vertex_cycles: Vec<Vec<Vec<(usize, usize)>>> =
-            //                 vec![vec![Vec::new(); 0]; figure_size];
-            //             let mut path: Vec<(usize, usize)> = Vec::new();
-            //             for v in 0..figure_size {
-            //                 find_cycles(
-            //                     v,
-            //                     v,
-            //                     &problem.figure.vertex_edges,
-            //                     &topo_vertex_edges,
-            //                     &mut path,
-            //                     &mut vertex_cycles[v],
-            //                     6,
-            //                 );
-            //                 info!("Vectex {} cycles: {}", v, vertex_cycles[v].len());
-            //             }
-            //
-            //             for v in 0..figure_size {
-            //                 // Starting vertex has no parent, so skipping for now.
-            //                 if v == start_vertex {
-            //                     continue;
-            //                 }
-            //                 info!(
-            //                     "Vectex {} degree after pruning: {}",
-            //                     v,
-            //                     vertex_deltas[v].len()
-            //                 );
-            //             }
-
             let precalc_time_taken = std::time::Instant::now() - precalc_start;
             info!(
                 "Precalc duration: {}.{}s",
@@ -232,7 +188,7 @@ impl Solver for TreeSearchSolver {
                 &mut edges_consumed,
                 &mut point_is_on_hole,
                 &mut covered_points_on_hole,
-                &edge_precalc,
+                &edge_bounds_precalc,
                 &back_edges,
                 &forward_edges,
                 &delta_precalc,
@@ -364,7 +320,7 @@ impl<'a> SearchRunner<'a> {
         edges_consumed: &mut Vec<i16>,
         point_is_on_hole: &mut Vec<Vec<i16>>,
         covered_points_on_hole: &mut usize,
-        edge_precalc: &Vec<(i64, i64)>,
+        edge_bounds_precalc: &Vec<(i64, i64)>,
         back_edges: &Vec<Vec<(usize, usize)>>,
         forward_edges: &Vec<Vec<(usize, usize)>>,
         delta_precalc: &Vec<Vec<(i64, i64)>>,
@@ -459,7 +415,7 @@ impl<'a> SearchRunner<'a> {
                 }
 
                 // Go over deltas precalcs here.
-                let bounds = &edge_precalc[e_id];
+                let bounds = &edge_bounds_precalc[e_id];
                 let mut valid_placements = 0;
                 for d in bounds.0..=bounds.1 {
                     for delta in delta_precalc[d as usize].iter() {
@@ -471,15 +427,15 @@ impl<'a> SearchRunner<'a> {
                         {
                             continue;
                         }
-                        // Propagate placement information.
-                        can_place_in[dst][(p_dst.0 - self.bbox_mn.x) as usize]
-                            [(p_dst.1 - self.bbox_mn.y) as usize] += 1;
 
-                        // TODO: Compare with expected edges number.
-                        if can_place_in[dst][(p_dst.0 - self.bbox_mn.x) as usize]
-                            [(p_dst.1 - self.bbox_mn.y) as usize]
-                            == 1 + edges_consumed[dst]
-                        {
+                        let shifted_x = (p_dst.0 - self.bbox_mn.x) as usize;
+                        let shifted_y = (p_dst.1 - self.bbox_mn.y) as usize;
+
+                        // Propagate placement information.
+                        can_place_in[dst][shifted_x][shifted_y] += 1;
+
+                        // Compare with expected edges number.
+                        if can_place_in[dst][shifted_x][shifted_y] == 1 + edges_consumed[dst] {
                             valid_placements += 1;
                             if fill_places_list {
                                 places_list[dst].borrow_mut().push(p_dst);
@@ -533,7 +489,7 @@ impl<'a> SearchRunner<'a> {
                     edges_consumed,
                     point_is_on_hole,
                     covered_points_on_hole,
-                    edge_precalc,
+                    edge_bounds_precalc,
                     back_edges,
                     forward_edges,
                     delta_precalc,
@@ -568,7 +524,7 @@ impl<'a> SearchRunner<'a> {
             for &(e_id, dst) in forward_edges[v].iter() {
                 edges_consumed[dst] -= 1;
                 // Go over deltas precalcs here.
-                let bounds = &edge_precalc[e_id];
+                let bounds = &edge_bounds_precalc[e_id];
                 for d in bounds.0..=bounds.1 {
                     for delta in delta_precalc[d as usize].iter() {
                         let p_dst = (p.0 + delta.0, p.1 + delta.1);
@@ -579,9 +535,12 @@ impl<'a> SearchRunner<'a> {
                         {
                             continue;
                         }
+
+                        let shifted_x = (p_dst.0 - self.bbox_mn.x) as usize;
+                        let shifted_y = (p_dst.1 - self.bbox_mn.y) as usize;
+
                         // Propagate placement information.
-                        can_place_in[dst][(p_dst.0 - self.bbox_mn.x) as usize]
-                            [(p_dst.1 - self.bbox_mn.y) as usize] -= 1;
+                        can_place_in[dst][shifted_x][shifted_y] -= 1;
                     }
                 }
 
